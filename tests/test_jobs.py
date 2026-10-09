@@ -134,6 +134,7 @@ def test_stale_preset_request_with_nothing_stale_is_done(sample_dir: Path, tmp_p
     start(sample_dir, tmp_path / "work")
     [res] = finish(sample_dir, tmp_path / "work")
     assert res.status == "done" and "nothing was built" in res.notices[0]
+    assert commit_message([res]) == "tailor: presets (nothing to build)"
 
 
 # ---------------------------------------------------------------- stages end to end

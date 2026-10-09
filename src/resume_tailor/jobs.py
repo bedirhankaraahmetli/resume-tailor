@@ -313,7 +313,8 @@ def commit_message(results: list[RunResult]) -> str:
     for r in results:
         if r.kind == "preset":
             built = [x.id for x in r.runs if x.status == "done"]
-            what = f"presets {', '.join(built)}" if built else "presets"
+            what = (f"presets {', '.join(built)}" if built
+                    else "presets (nothing to build)" if r.status == "done" else "presets")
         else:
             what = (r.folder or r.id).removeprefix("applications/")
         parts.append(what if r.status == "done" else f"{what} (failed)")
