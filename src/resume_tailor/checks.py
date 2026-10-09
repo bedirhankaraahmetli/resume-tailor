@@ -7,6 +7,7 @@ accents extracted as separate characters ("g˘" instead of "ğ").
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from .models import Analysis
@@ -27,6 +28,34 @@ def on_page(page_folded: str, page_squashed: str, term: str) -> bool:
         return True
     sq = _squash(term)
     return len(sq) >= 4 and sq in page_squashed
+
+
+# Words that only say "this is a skill": "iOS development" is evidenced by "iOS". Dropped
+# before the soft match, never added to: a word missing here makes a match stricter.
+_GENERIC = {
+    "development", "developing", "developer", "experience", "experienced", "practice",
+    "practices", "principles", "principle", "skills", "skill", "knowledge", "proficiency",
+    "familiarity", "software", "programming", "participation", "ability", "abilities",
+}
+
+
+def _core_phrase(term: str) -> str | None:
+    """The term without its generic words, or None if nothing generic was dropped or
+    nothing meaningful is left."""
+    words = [w for w in re.split(r"[\s/]+", fold(term)) if w]
+    core = [w for w in words if w not in _GENERIC]
+    return " ".join(core) if 0 < len(core) < len(words) else None
+
+
+def soft_match(text_folded: str, term: str) -> bool:
+    """The whole term, or the term without its generic words, as a whole phrase:
+    "iOS development" is backed by "iOS". The rest stays a phrase on purpose: matching
+    words one by one made "code review" match "code" in one bullet and an "In Review"
+    status label in another."""
+    if contains_term(text_folded, term):
+        return True
+    core = _core_phrase(term)
+    return core is not None and contains_term(text_folded, core)
 
 
 @dataclass
@@ -71,18 +100,23 @@ class KeywordReport:
         return round(100 * len(self.present) / total) if total else None
 
 
-def keyword_report(analysis: Analysis, en_text: str, inventory_text: str) -> KeywordReport:
-    """match % = keywords found in the EN text / all keywords (PROMPT.md §5.7)."""
-    ft, fs, fi = fold(en_text), _squash(en_text), fold(inventory_text)
+def keyword_report(analysis: Analysis, en_text: str,
+                   evidence: str | list[str]) -> KeywordReport:
+    """match % = keywords found in the EN text / all keywords (PROMPT.md §5.7).
+
+    `evidence` is the owner's positive inventory text, ideally one string per entry so a
+    multi-word keyword has to be backed by a single entry (see `soft_match`)."""
+    ft, fs = fold(en_text), _squash(en_text)
+    chunks = [fold(e) for e in ([evidence] if isinstance(evidence, str) else evidence)]
     present: list[str] = []
     missing: list[str] = []
     gaps: list[str] = []
     must: list[list[str]] = []
     for kw in analysis.keywords:
         forms = [kw.term, *kw.synonyms]
-        if any(on_page(ft, fs, f) for f in forms):
+        if any(on_page(ft, fs, f) or soft_match(ft, f) for f in forms):
             present.append(kw.term)
-        elif any(contains_term(fi, f) for f in forms):
+        elif any(soft_match(c, f) for c in chunks for f in forms):
             missing.append(kw.term)
         else:
             gaps.append(kw.term)

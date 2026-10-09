@@ -44,6 +44,21 @@ def test_turkish_synonym_counts_as_present() -> None:
     assert "machine learning" in k.present and "classification" in k.present
 
 
+def test_soft_match_drops_generic_words_but_keeps_the_phrase() -> None:
+    from resume_tailor.checks import soft_match
+    from resume_tailor.text import fold
+
+    ios = fold("Built a privacy-first iOS and Android app")
+    assert soft_match(ios, "iOS development") and soft_match(ios, "Android development")
+    assert soft_match(fold("Enforced a layered architecture"), "Software architecture")
+    # what is left must still be a phrase: these are not evidence
+    assert not soft_match(fold("UI design and optimization in Unity"), "Performance optimization")
+    assert not soft_match(fold("Wrote code. Status: In Review"), "Code review")
+    assert not soft_match(fold("game mechanics, UI design"), "Game design")
+    # a term that is only generic words never soft-matches
+    assert not soft_match(fold("software"), "Software development")
+
+
 # ---- presets ------------------------------------------------------------------------------
 
 

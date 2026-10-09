@@ -94,6 +94,15 @@ class Catalog:
         parts += [f"{c.inv.name} {c.inv.issuer}" for c in self.certificates.values()]
         return "\n".join(parts)
 
+    def evidence_chunks(self) -> list[str]:
+        """`evidence_text`, one string per inventory entry (plus one for the skill list,
+        courses and certificates), so keyword evidence must come from a single place."""
+        parts = [e.source_text for e in self.entries.values() if e.inv.usable]
+        parts.append("\n".join(self.skills + [c.en for c in self.courses]
+                                + [f"{c.inv.name} {c.inv.issuer}"
+                                   for c in self.certificates.values()]))
+        return parts
+
     def usable_project_ids(self) -> list[str]:
         return [p for p in self.project_ids if self.entries[p].inv.usable]
 

@@ -140,7 +140,7 @@ function actions(folder: string, files: OutFile[], title: string): HTMLElement {
   }
   if (canShareFiles()) {
     const btn = h("button", { class: canSaveToFolder() ? "secondary" : "primary" },
-      "Share or save to Files");
+      canSaveToFolder() ? "Share…" : "Share or save to Files");
     btn.addEventListener("click", busy(btn, out, () => share(files, title)));
     row.append(btn);
   }

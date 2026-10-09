@@ -233,15 +233,19 @@ def _compile(data_dir: Path, config: Config, req: RunRequest, router: Router,
 
         keywords = None
         if req.kind == "application":
-            keywords = keyword_report(analysis, info["en"].text, cat.evidence_text())
+            keywords = keyword_report(analysis, info["en"].text, cat.evidence_chunks())
         # Say what the first answer got wrong: it shows how much the guard is doing.
         warnings = [f"fact guard caught (fixed by the repair round): {x}"
                     for x in state.repaired]
         warnings += g.warnings
         for lang in ("en", "tr"):
+            # Must-have keywords are checked on the English page only. Both pages carry the
+            # same selection (T8), so a term missing from the Turkish one is a vocabulary
+            # difference ("oyun geliştirme"), not missing content, and the posting analysis
+            # rarely supplies the Turkish form to match it against.
+            must = keywords.must_have_with_evidence if keywords and lang == "en" else None
             ats = ats_check(info[lang].text, names=config.owner.names,
-                            email=config.owner.email, lang=lang,
-                            must_have=keywords.must_have_with_evidence if keywords else None)
+                            email=config.owner.email, lang=lang, must_have=must)
             if ats.errors:
                 raise RunFailed("ATS check failed: " + "; ".join(ats.errors))
             warnings += ats.warnings

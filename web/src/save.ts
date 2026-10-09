@@ -112,8 +112,22 @@ export function canShareFiles(): boolean {
   }
 }
 
+/**
+ * Browsers share only a fixed list of file types, and one refused file fails the whole
+ * share with "Permission denied" (NotAllowedError). Markdown is not on Chrome's list, so
+ * the report goes as plain text, and anything still refused is left out.
+ * Must run straight from a click: `navigator.share` needs the user's gesture, so nothing
+ * here may await before the share call.
+ */
 export async function share(files: OutFile[], title: string): Promise<void> {
-  const list = files.map((f) => new File([f.data as BlobPart], f.name, { type: f.type }));
+  const all = files.map((f) => f.name.endsWith(".md")
+    ? new File([f.data as BlobPart], f.name.replace(/\.md$/, ".txt"), { type: "text/plain" })
+    : new File([f.data as BlobPart], f.name, { type: f.type }));
+  const list = navigator.canShare({ files: all })
+    ? all
+    : all.filter((f) => navigator.canShare({ files: [f] }));
+  if (!list.length) throw new Error("This browser cannot share these files. Use the "
+    + "Download buttons instead.");
   try {
     await navigator.share({ files: list, title });
   } catch (e) {
