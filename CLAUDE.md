@@ -29,6 +29,10 @@ There are two repos:
   `fit` (pdfLaTeX) → `checks` → outputs.
 - **`catalog.py`** joins the inventory, both bases and the config by id. The renderer and
   the guard read only the catalog.
+- **GitHub Actions** runs `.github/workflows/tailor.yml` (reusable), called from the data
+  repo's workflow that `tailor init-data-repo` writes. It runs the stages as separate steps
+  through `jobs.py` (`tailor request start|analyze|tailor|compile|finish`). The step names
+  are a contract with the web app. Design notes are in PLAN.md §0, "Phase 2 notes".
 - **`tailor check --data-dir ../resume-data`** must pass after any change to the base
   parser or renderer: it runs the identity round-trip on the real data.
 - **Tests:** run `RT_DATA_DIR=../resume-data pytest` to include the real-data tests.

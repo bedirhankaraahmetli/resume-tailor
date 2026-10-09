@@ -180,6 +180,59 @@ def cmd_preset_build(a: argparse.Namespace) -> int:
     return rc
 
 
+def _gh_append(var: str, text: str) -> None:
+    """Append to a GitHub Actions file ($GITHUB_OUTPUT, $GITHUB_STEP_SUMMARY) if set."""
+    path = os.environ.get(var)
+    if path:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(text)
+
+
+def cmd_request_start(a: argparse.Namespace) -> int:
+    from .jobs import start
+
+    q = start(Path(a.data_dir), Path(a.work), [Path(p) for p in a.request] or None)
+    requests = sorted({j.request_id for j in q.jobs})
+    print(f"{len(requests)} request(s), {len(q.jobs)} run(s) queued")
+    for rid in requests:
+        print(f"  {rid}")
+    _gh_append("GITHUB_OUTPUT", f"jobs={len(q.jobs)}\n")
+    return 0
+
+
+def cmd_request_stage(a: argparse.Namespace) -> int:
+    from .jobs import run_queue_stage
+
+    return 0 if run_queue_stage(Path(a.data_dir), Path(a.work), a.stage) else 1
+
+
+def cmd_request_finish(a: argparse.Namespace) -> int:
+    from .jobs import commit_message, finish, summary_markdown
+
+    results = finish(Path(a.data_dir), Path(a.work))
+    msg = commit_message(results)
+    if a.message_file:
+        Path(a.message_file).write_text(msg + "\n", encoding="utf-8")
+    print(msg)
+    if results:
+        _gh_append("GITHUB_STEP_SUMMARY", summary_markdown(results))
+    return 0
+
+
+def cmd_init_data_repo(a: argparse.Namespace) -> int:
+    from .scaffold import init_data_repo, tool_head
+
+    ref = a.tool_ref or tool_head()
+    if not ref:
+        print("pass --tool-ref <commit or tag> of the tool repo to pin the workflow to",
+              file=sys.stderr)
+        return 2
+    for line in init_data_repo(Path(a.path), tool_repo=a.tool_repo, tool_ref=ref,
+                               update_workflow=a.update_workflow):
+        print(line)
+    return 0
+
+
 def cmd_keys_list(a: argparse.Namespace) -> int:
     path = Path(a.env_file)
     print(f"keys in {path.resolve()}")
@@ -293,6 +346,33 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--note")
     pb.add_argument("--out")
     pb.set_defaults(fn=cmd_preset_build)
+
+    i = sub.add_parser("init-data-repo", help="scaffold a private data repo")
+    i.add_argument("path")
+    i.add_argument("--tool-repo", default="bedirhankaraahmetli/resume-tailor",
+                   help="OWNER/NAME of the public tool repo the workflow calls")
+    i.add_argument("--tool-ref",
+                   help="commit or tag of the tool to pin (default: this checkout's HEAD)")
+    i.add_argument("--update-workflow", action="store_true",
+                   help="rewrite .github/workflows/tailor.yml even if it exists")
+    i.set_defaults(fn=cmd_init_data_repo)
+
+    rq = sub.add_parser("request", help="process request files (used by GitHub Actions)")
+    rsub = rq.add_subparsers(dest="rcmd", required=True)
+    rs = rsub.add_parser("start", help="queue pending requests (or the given files)")
+    rs.add_argument("--request", action="append", default=[],
+                    help="request file (relative to the data dir); repeatable")
+    rs.set_defaults(fn=cmd_request_start)
+    for stage in ("analyze", "tailor", "compile"):
+        st = rsub.add_parser(stage, help=f"run the {stage} stage for every queued request")
+        st.set_defaults(fn=cmd_request_stage, stage=stage)
+    rf = rsub.add_parser("finish", help="write results/<id>.json and the commit message")
+    rf.add_argument("--message-file")
+    rf.set_defaults(fn=cmd_request_finish)
+    for rp in rsub.choices.values():
+        rp.add_argument("--data-dir", required=True)
+        rp.add_argument("--work", required=True,
+                        help="checkpoint folder shared by the steps (outside the data repo)")
 
     k = sub.add_parser("keys", help="add, change, check or remove API keys")
     ksub = k.add_subparsers(dest="kcmd", required=True)

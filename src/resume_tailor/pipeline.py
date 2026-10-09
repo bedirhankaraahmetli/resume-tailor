@@ -11,7 +11,7 @@ import json
 import shutil
 import tempfile
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -37,6 +37,9 @@ from .router import Router
 
 class RunFailed(RuntimeError):
     pass
+
+
+Stage = Literal["analyze", "tailor", "compile"]
 
 
 @dataclass
@@ -78,6 +81,21 @@ def preset_analysis(preset: Preset) -> Analysis:
                     seniority="unspecified", must_have=[], nice_to_have=[], keywords=[])
 
 
+STAGES: tuple[Stage, ...] = ("analyze", "tailor", "compile")
+
+
+@dataclass
+class RunState:
+    """Everything one stage hands to the next. In `tailor run` it lives in memory; in
+    GitHub Actions each stage is its own step (so the web app can show which one is
+    running) and the state goes through a checkpoint file between them."""
+
+    analysis: Analysis | None = None
+    tailoring: Tailoring | None = None
+    raw_tailoring: str | None = None
+    repaired: list[str] = field(default_factory=list)
+
+
 def run(data_dir: Path, req: RunRequest, *, out_dir: Path | None,
         providers: dict[str, Provider] | None = None,
         log: Callable[[str], None] = print) -> RunResult:
@@ -86,38 +104,56 @@ def run(data_dir: Path, req: RunRequest, *, out_dir: Path | None,
     ledger = Ledger(data_dir, req.request_id, req.kind)
     router = Router(config, providers or default_providers(config), ledger, repair_prompt,
                     first=req.provider)
+    state = RunState()
     try:
-        _run(data_dir, config, req, router, result, out_dir, log)
+        for stage in STAGES:
+            run_stage(stage, data_dir, config, req, router, state, result, out_dir, log)
         result.status = "done"
     except Exception as e:  # every failure becomes a readable result, never a traceback
-        result.error = _describe(e)
+        result.error = describe(e)
         log(f"FAILED: {result.error}")
     finally:
-        result.notices = list(dict.fromkeys([*result.notices, *router.notices]))
-        result.cost_usd = router.total_cost
-        if router.responses:
-            result.provider = router.responses[-1].provider
-            result.model = router.responses[-1].model
-        results_dir = data_dir / "results"
-        results_dir.mkdir(exist_ok=True)
-        (results_dir / f"{req.request_id}.json").write_text(
-            result.model_dump_json(indent=2), encoding="utf-8")
+        finish_result(result, router)
+        write_result(data_dir, result)
     return result
 
 
-def _describe(e: Exception) -> str:
+def run_stage(stage: Stage, data_dir: Path, config: Config, req: RunRequest, router: Router,
+              state: RunState, result: RunResult, out_dir: Path | None,
+              log: Callable[[str], None]) -> None:
+    """One stage. Raises on failure; the caller turns the exception into a result."""
+    if stage == "analyze":
+        _analyze(data_dir, config, req, router, state, log)
+    elif stage == "tailor":
+        _tailor(data_dir, config, req, router, state, log)
+    else:
+        _compile(data_dir, config, req, router, state, result, out_dir, log)
+
+
+def finish_result(result: RunResult, router: Router) -> None:
+    result.notices = list(dict.fromkeys([*result.notices, *router.notices]))
+    result.cost_usd = router.total_cost
+    if router.responses:
+        result.provider = router.responses[-1].provider
+        result.model = router.responses[-1].model
+
+
+def write_result(data_dir: Path, result: RunResult) -> None:
+    results_dir = data_dir / "results"
+    results_dir.mkdir(exist_ok=True)
+    (results_dir / f"{result.id}.json").write_text(
+        result.model_dump_json(indent=2), encoding="utf-8")
+
+
+def describe(e: Exception) -> str:
     if isinstance(e, RunFailed | ProviderError):
         return str(e)
     return f"{type(e).__name__}: {e}"
 
 
-def _run(data_dir: Path, config: Config, req: RunRequest, router: Router, result: RunResult,
-         out_dir: Path | None, log: Callable[[str], None]) -> None:
-    cat = build_catalog(data_dir, config)
-
-    # ---- 1. analysis
+def _analyze(data_dir: Path, config: Config, req: RunRequest, router: Router,
+             state: RunState, log: Callable[[str], None]) -> None:
     log("analyzing posting…")
-    provider: Provider | None = None
     if req.kind == "preset":
         assert req.preset is not None
         analysis = preset_analysis(req.preset)
@@ -132,35 +168,49 @@ def _run(data_dir: Path, config: Config, req: RunRequest, router: Router, result
         analysis.company = req.company
     if req.position:
         analysis.position = req.position
+    state.analysis = analysis
 
-    # ---- 2. tailoring + fact guard (one repair round on the same provider)
+
+def _tailor(data_dir: Path, config: Config, req: RunRequest, router: Router, state: RunState,
+            log: Callable[[str], None]) -> None:
+    """Tailoring plus the fact guard, with one repair round on the same provider."""
+    assert state.analysis is not None
+    cat = build_catalog(data_dir, config)
     log("tailoring…")
     call: LLMCall | None = None
-    raw_tailoring: str | None = None
+    provider: Provider | None = None
     if req.dry_run:
         _, tailoring = _load_fixture(req, data_dir)
     else:
-        call = tailor_call(cat, analysis=analysis, posting=req.posting, note=req.note,
+        call = tailor_call(cat, analysis=state.analysis, posting=req.posting, note=req.note,
                            preset=req.preset, model=req.model)
         tailoring, resp, provider = router.run(call, Tailoring.model_validate_json)
-        raw_tailoring = resp.text
+        state.raw_tailoring = resp.text
     g = check(cat, tailoring)
-    repaired: list[str] = []
     if not g.ok and call is not None and provider is not None:
         log(f"fact guard: {len(g.violations)} problem(s); asking for one repair…")
-        repaired = [str(v) for v in g.violations]
+        state.repaired = [str(v) for v in g.violations]
         repair = LLMCall("repair", "tailor", call.system,
                          repair_prompt(call.user, tailoring.model_dump_json(),
                                        [str(v) for v in g.violations]),
                          Tailoring, call.model_override)
         tailoring, resp = router.call_on(provider, repair, Tailoring.model_validate_json)
-        raw_tailoring = resp.text
+        state.raw_tailoring = resp.text
         g = check(cat, tailoring)
     if not g.ok:
         raise RunFailed("fact guard failed after one repair round:\n"
                         + "\n".join(f"  - {v}" for v in g.violations))
+    state.tailoring = tailoring
 
-    # ---- 3. render + compile + fit (both languages together)
+
+def _compile(data_dir: Path, config: Config, req: RunRequest, router: Router,
+             state: RunState, result: RunResult, out_dir: Path | None,
+             log: Callable[[str], None]) -> None:
+    """Render, compile and fit both languages together, run the checks, write outputs."""
+    analysis, tailoring = state.analysis, state.tailoring
+    assert analysis is not None and tailoring is not None
+    cat = build_catalog(data_dir, config)
+    g = check(cat, tailoring)  # deterministic, so recomputing it here is free of drift
     log("compiling and fitting to one page…")
     work = Path(tempfile.mkdtemp(prefix="rt-build-"))
     try:
@@ -181,12 +231,12 @@ def _run(data_dir: Path, config: Config, req: RunRequest, router: Router, result
         if any(i.pages != 1 or i.overflow_projects for i in info.values()):
             raise RunFailed("final build is not one page or has a heading wider than the page")
 
-        # ---- 4. checks
         keywords = None
         if req.kind == "application":
             keywords = keyword_report(analysis, info["en"].text, cat.evidence_text())
         # Say what the first answer got wrong: it shows how much the guard is doing.
-        warnings = [f"fact guard caught (fixed by the repair round): {r}" for r in repaired]
+        warnings = [f"fact guard caught (fixed by the repair round): {x}"
+                    for x in state.repaired]
         warnings += g.warnings
         for lang in ("en", "tr"):
             ats = ats_check(info[lang].text, names=config.owner.names,
@@ -197,9 +247,9 @@ def _run(data_dir: Path, config: Config, req: RunRequest, router: Router, result
             warnings += ats.warnings
         warnings += cat.warnings
 
-        # ---- 5. write outputs
         _write_outputs(data_dir, config, cat, req, analysis, tailoring, final, fitted.log,
-                       info, keywords, warnings, router, result, out_dir, work, raw_tailoring)
+                       info, keywords, warnings, router, result, out_dir, work,
+                       state.raw_tailoring)
     finally:
         shutil.rmtree(work, ignore_errors=True)
 

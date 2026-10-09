@@ -92,6 +92,44 @@ repo root is the companion contract.
 instead of sub-packages, except `providers/`. `init-data-repo`, the reusable workflow and
 the caller template are Phase 2.
 
+### Phase 2 notes (2026-10-09)
+
+**Every run builds every pending request**, not only the request in its trigger. This
+replaces "the request path as input" from PROMPT.md §8.
+- **Why:** GitHub keeps at most one *pending* run per concurrency group and cancels older
+  pending runs. With three quick submissions, the middle one's run is cancelled and never
+  starts.
+- **Pending means** there is no `results/<id>.json` yet. A failed request still gets one,
+  so it is never retried automatically, because a retry spends credits again. The
+  `request` input of `workflow_dispatch` rebuilds one file on purpose.
+- **The data checkout is the branch tip,** not the triggering commit. A run that waited in
+  the queue must see the results the previous run pushed, or it builds them again.
+- **For the web app (Phase 3):** treat `results/<id>.json` as the source of truth. The run
+  started by your own commit may be the one that was cancelled, and another run built the
+  request.
+
+**The stages are separate CLI calls** (`tailor request start|analyze|tailor|compile|finish`).
+- They share a checkpoint at `$RUNNER_TEMP/rt-work/queue.json`, outside the data repo, so
+  it is never committed.
+- That checkpoint holds the analysis, the tailoring, the router's responses and the
+  notices.
+- `tailor run` runs the same three stage functions in one process, so the two paths cannot
+  drift apart.
+- **The step names are a contract with the web app:** `Analyze posting`, `Tailor`,
+  `Compile and check`, `Publish`.
+
+**Smaller decisions.**
+- **Preset requests:** a preset request is one job per preset, reported in one result file
+  with a `runs` list.
+- **Interrupted runs:** if a run is cancelled or times out, `Publish` (`if: always()`)
+  still writes a failed result that names the step it stopped in.
+- **Pinning:** the caller pins the tool to a **commit SHA**, not a tag, because tags can
+  be moved. `init-data-repo` defaults to the checkout's `HEAD`.
+- **Claude Code** is installed in CI only when `CLAUDE_CODE_OAUTH_TOKEN` is set.
+- **Push races:** the Publish step does `git pull --rebase` with 5 retries. A real
+  conflict, for example the web app editing `applications.csv` at the same moment, still
+  fails the push. Phase 3's CSV edits should retry on their side (§2.10).
+
 ---
 
 ## 1. Scope (restated)

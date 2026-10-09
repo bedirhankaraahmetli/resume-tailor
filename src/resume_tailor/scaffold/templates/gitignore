@@ -1,0 +1,9 @@
+# Secrets: keys live in .env locally and in Actions secrets on GitHub.
+.env
+.env.*
+
+# LaTeX by-products (the _build folders keep only .tex sources)
+*.aux
+*.log
+*.out
+__pycache__/

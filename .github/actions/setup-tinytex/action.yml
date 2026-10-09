@@ -5,12 +5,18 @@ description: >
 runs:
   using: composite
   steps:
+    # hashFiles() only sees the caller's workspace layout, and the reusable workflow checks
+    # this repo out into a subfolder. Hash the package list from the action's own path.
+    - name: Cache key
+      id: key
+      shell: bash
+      run: echo "hash=$(sha256sum "${{ github.action_path }}/packages.txt" | cut -c1-16)" >> "$GITHUB_OUTPUT"
     - name: Cache TinyTeX
       id: cache
       uses: actions/cache@v4
       with:
         path: ~/.TinyTeX
-        key: tinytex-v1-${{ runner.os }}-${{ hashFiles('.github/actions/setup-tinytex/packages.txt') }}
+        key: tinytex-v1-${{ runner.os }}-${{ steps.key.outputs.hash }}
     - name: Install TinyTeX
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash

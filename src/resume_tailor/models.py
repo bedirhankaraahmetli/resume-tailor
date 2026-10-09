@@ -148,6 +148,8 @@ class RunResult(BaseModel):
     match_pct: int | None = None
     notices: list[str] = Field(default_factory=list)
     error: str | None = None
+    # A preset request builds several presets; each one's own result, keyed by preset id.
+    runs: list[RunResult] = Field(default_factory=list)
 
 
 class PresetManifest(BaseModel):

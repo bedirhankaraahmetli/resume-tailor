@@ -30,6 +30,7 @@ packages = ["src/resume_tailor"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "prompts" = "resume_tailor/_prompts"
+"sample-data" = "resume_tailor/_sample"
 
 [tool.ruff]
 line-length = 100

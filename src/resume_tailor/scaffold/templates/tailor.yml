@@ -1,0 +1,38 @@
+# Builds tailored resumes when a request file is pushed to requests/.
+# Written by `tailor init-data-repo`; the logic lives in the public tool repo.
+name: tailor
+
+on:
+  push:
+    branches: [main]
+    paths: ["requests/**.json"]
+  workflow_dispatch:
+    inputs:
+      request:
+        description: "Request file to build again, e.g. requests/<id>.json. Leave empty to build every pending request."
+        required: false
+        default: ""
+
+# One build at a time, never cancelled midway (it may already have spent API credits).
+# GitHub keeps only the newest pending run in a group and cancels older pending ones. That
+# is safe here: every run builds *all* pending requests, not only the one that started it.
+concurrency:
+  group: tailor
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  tailor:
+    # Pinned to a commit of the tool. Update both refs together, e.g. with
+    # `tailor init-data-repo . --update-workflow --tool-ref <sha>`.
+    uses: {{TOOL_REPO}}/.github/workflows/tailor.yml@{{TOOL_REF}}
+    with:
+      tool-repo: {{TOOL_REPO}}
+      tool-ref: {{TOOL_REF}}
+      request: ${{ inputs.request || '' }}
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

@@ -13,8 +13,8 @@ Turkish), generated from your own LaTeX resume, plus a keyword match report.
 - **Private.** Your name, contact details and links never reach an LLM provider: they are
   redacted, and the call aborts if anything personal survives.
 
-> Status: Phase 1 (core + CLI). The GitHub Actions workflow and the web app (for use
-> from a phone) come in Phases 2 and 3. See [docs/PLAN.md](docs/PLAN.md).
+> Status: Phase 2 (core, CLI and GitHub Actions). The web app (for use from a phone)
+> comes in Phase 3. See [docs/PLAN.md](docs/PLAN.md).
 
 ## Quick start (CLI)
 
@@ -33,6 +33,7 @@ tailor run --data-dir ../resume-data --posting posting.txt          # or .pdf, o
 tailor run --data-dir ../resume-data --posting posting.txt --company "ABC" --position "Veri Bilimci" --note "emphasize iOS"
 tailor preset list  --data-dir ../resume-data
 tailor preset build --data-dir ../resume-data --stale               # only outdated presets
+tailor keys list                                                    # which API keys are set (masked)
 ```
 
 Output lands in `Desktop/Job Applications/<Company> - <Position>/` (OneDrive-redirected
@@ -95,8 +96,63 @@ same way.
 2. **Settings → Billing → Buy credits** (for example $10). Leave **auto-reload off**.
    Credits expire one year after purchase and are non-refundable.
 3. Create an API key in a dedicated workspace named `resume-tailor`.
-4. Put it in a local `.env` file (never committed) as `ANTHROPIC_API_KEY=...`. For GitHub
-   Actions (Phase 2), add it as the repository secret `ANTHROPIC_API_KEY`.
+4. Store it with `tailor keys set anthropic` (hidden input, checked with a free call,
+   saved to a local `.env` that is never committed). Add `--github OWNER/resume-data` to
+   store it as that repo's Actions secret too; the value goes to `gh` over stdin only.
+
+## Running it on GitHub Actions
+
+Your data lives in a **private** repo (`resume-data`). Pushing a request file there runs
+this repo's reusable workflow, which commits the PDFs, the report and
+`results/<id>.json` back.
+
+1. **Create the private repo and scaffold it.** This never overwrites a file; on an
+   existing data folder it only adds what is missing:
+
+   ```bash
+   gh repo create resume-data --private
+   tailor init-data-repo ../resume-data          # pins the workflow to this checkout's commit
+   ```
+
+   It writes `.github/workflows/tailor.yml`, `requests/`, `results/`, a `.gitignore`
+   and, if missing, a fictional sample `config.yml`, inventory and base resumes to replace.
+   To move to a newer tool version later:
+   `tailor init-data-repo ../resume-data --update-workflow --tool-ref <commit>`.
+
+2. **Add the secrets** (resume-data → Settings → Secrets and variables → Actions):
+
+   | Secret | Needed? | How to get it |
+   |---|---|---|
+   | `ANTHROPIC_API_KEY` | Yes, for the default provider | See *Setting up the Claude API*; `tailor keys set anthropic --github OWNER/resume-data` |
+   | `CLAUDE_CODE_OAUTH_TOKEN` | Optional fallback | Run `claude setup-token` locally (Pro/Max plan), then `gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo OWNER/resume-data` and paste it at the hidden prompt |
+   | `GEMINI_API_KEY` | Optional fallback | <https://aistudio.google.com/apikey>; `tailor keys set gemini --github OWNER/resume-data` |
+
+   Never paste a key into a file in either repo, an issue or a chat. The workflow passes
+   keys only to the two steps that call a provider and never prints them.
+
+3. **Make a request** by committing `requests/<id>.json` (the web app will do this for
+   you in Phase 3; the format is in the data repo's README):
+
+   ```json
+   { "schema_version": 1, "type": "application", "id": "20261009-141205-abc-firm",
+     "posting": { "text": "…" }, "company": null, "position": null }
+   ```
+
+   Presets: `{ "schema_version": 1, "type": "preset", "id": "…", "presets": "stale" }`.
+
+**How a run behaves.**
+- **Steps.** It runs `Analyze posting`, `Tailor`, `Compile and check` and `Publish` as
+  separate steps, so the web app can show which one is running.
+- **One at a time.** Runs are serialised by a concurrency group and never cancelled
+  midway.
+- **Pending requests.** Each run builds *every* request that has no `results/<id>.json`
+  yet. GitHub drops older pending runs in a group, so this is what keeps a request from
+  being lost.
+- **Failures.** A failed request still gets a result file with the error, and it is not
+  retried automatically: a retry would spend credits again. To rebuild one, run the
+  workflow by hand with its path.
+- **No loops.** Its own commit cannot trigger it again: pushes made with `GITHUB_TOKEN`
+  never start workflows, and the trigger is limited to `requests/**.json`.
 
 ## Development
 
