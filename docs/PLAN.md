@@ -205,6 +205,17 @@ From PROMPT.md §12:
     inventory dominates), so a letter is about $0.03–0.05 and one language saves only
     about $0.01 of output. Dropping the base digest from the letter block would be the
     next saving if that matters.
+  - **First live run (Good Job Games, 2026-10-09): letter skipped.** Paragraph 1 had a
+    "10" in no cited source and the repair kept it; most likely a fact about the
+    company from the model's own knowledge. The guard was right. Fixed in the prompt
+    (company facts only from the posting; the opening paragraph has no numbers; edited
+    in place because letter.v1 had never produced a letter), in the repair message (an
+    unsupported number is deleted, not re-sourced), and `_build/llm-response.json` now
+    keeps `letter_attempts` (each answer and its violations).
+- **Delete in History (owner, 2026-10-09):** one commit removes the CSV row and, for a
+  tailored run, its folder plus its request and result files together (a request
+  without a result would be rebuilt). A folder another row still uses is kept; preset
+  and base rows only lose their row. On each History card and on the folder page.
 - status editing in History. **Built (2026-10-09):** a picker on each card (applied /
   interview / offer / rejected; an unknown existing value is kept as an option).
   `csv.setField` rewrites only that record's bytes, finds the row by its full content

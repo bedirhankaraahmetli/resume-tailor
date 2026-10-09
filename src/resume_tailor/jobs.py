@@ -89,6 +89,7 @@ class Job(BaseModel):
     raw_tailoring: str | None = None
     repaired: list[str] = Field(default_factory=list)
     letter: CoverLetter | None = None
+    letter_attempts: list[dict[str, object]] = Field(default_factory=list)
     responses: list[dict[str, object]] = Field(default_factory=list)
     notices: list[str] = Field(default_factory=list)
 
@@ -290,7 +291,8 @@ def run_queue_stage(data_dir: Path, work: Path, stage: Stage, *,
                         responses=[_response_from_dict(r) for r in job.responses])
         state = RunState(analysis=job.analysis, tailoring=job.tailoring,
                          raw_tailoring=job.raw_tailoring, repaired=list(job.repaired),
-                         letter=job.letter)
+                         letter=job.letter,
+                         letter_attempts=list(job.letter_attempts))
         result = job.result
         try:
             run_stage(stage, data_dir, config, req, router, state, result, None,
@@ -308,7 +310,7 @@ def run_queue_stage(data_dir: Path, work: Path, stage: Stage, *,
         job.responses = [_response_to_dict(r) for r in router.responses]
         job.analysis, job.tailoring = state.analysis, state.tailoring
         job.raw_tailoring, job.repaired = state.raw_tailoring, state.repaired
-        job.letter = state.letter
+        job.letter, job.letter_attempts = state.letter, state.letter_attempts
         save_queue(work, q)  # after every job, so a crash keeps what is done
     return ok
 

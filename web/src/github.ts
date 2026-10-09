@@ -130,12 +130,14 @@ export class GitHub {
 
   /**
    * Several files in one commit, through the Git Data API (the Contents API writes one file
-   * per commit). `edit` gets the files as of the branch head and returns their new text.
+   * per commit). `edit` gets the files as of the branch head and returns their new text, or
+   * null to delete a file. Every file under a `removeUnder` folder is deleted too.
    * The ref moves only as a fast-forward, so a commit that landed in between (the workflow
    * writes too) makes it fail with 422; then it re-reads, re-applies and retries (§2.10).
    */
   async commitFiles(paths: string[], message: string,
-                    edit: (files: Map<string, string>) => Map<string, string>): Promise<string> {
+                    edit: (files: Map<string, string>) => Map<string, string | null>,
+                    removeUnder: string[] = []): Promise<string> {
     const { defaultBranch } = await this.checkAccess();
     const ref = `heads/${defaultBranch.split("/").map(encodeURIComponent).join("/")}`;
     for (let attempt = 1; ; attempt++) {
@@ -150,10 +152,23 @@ export class GitHub {
         files.set(p, f.text);
       }
       const changed = edit(files);
+      const entries: object[] = [];
+      const deletes = [...changed].filter(([, c]) => c === null).map(([p]) => p);
+      if (deletes.length || removeUnder.length) {
+        // A deletion must name a path that exists, so look at what the commit holds.
+        const all = await this.json<{ tree: { path: string; type: string }[] }>(
+          `/git/trees/${commit.tree.sha}?recursive=1`, "list the repository");
+        const blobs = all.tree.filter((t) => t.type === "blob").map((t) => t.path);
+        const gone = new Set([...deletes.filter((d) => blobs.includes(d)),
+          ...blobs.filter((b) => removeUnder.some((dir) => b.startsWith(`${dir}/`)))]);
+        for (const path of gone) entries.push({ path, mode: "100644", type: "blob", sha: null });
+      }
+      for (const [path, content] of changed) {
+        if (content !== null) entries.push({ path, mode: "100644", type: "blob", content });
+      }
       const tree = await this.json<{ sha: string }>("/git/trees", "write the files", {
         method: "POST",
-        body: JSON.stringify({ base_tree: commit.tree.sha, tree: [...changed].map(
-          ([path, content]) => ({ path, mode: "100644", type: "blob", content })) }),
+        body: JSON.stringify({ base_tree: commit.tree.sha, tree: entries }),
       });
       const next = await this.json<{ sha: string }>("/git/commits", "create the commit", {
         method: "POST",

@@ -21,16 +21,19 @@ them, and never write a name, an email, a phone number or a link.
    languages and in any wording.
 5. Use only projects whose `usable` is true in the CATALOG.
 6. Never claim years of experience, seniority, leadership or impact the inventory does
-   not state. Do not praise the company with facts you were not given; the posting is
-   the only source about the company.
-7. If the posting asks for something the candidate lacks, do not hint at having it. You
+   not state.
+7. Say nothing about the company that is not in the posting. No size, rankings,
+   download or player counts, products, founding year or reputation from your own
+   knowledge: the checks reject any number the candidate's sources do not contain.
+8. If the posting asks for something the candidate lacks, do not hint at having it. You
    may say the candidate is keen to learn it only if the inventory supports that kind of
    statement (for example, a skill listed as willingness to learn).
 
 # Shape
 
 - 3 or 4 paragraphs, about 250–350 words in total per language. It must fit on one page.
-  - Why this role: the position and what in the posting matches the candidate.
+  - Why this role: the position and what in the posting matches the candidate. This
+    paragraph contains no numbers at all.
   - Evidence: one or two of the most relevant projects or the internship, concretely.
   - A short closing paragraph: availability to talk, thanks.
 - Lead with the projects the RESUME SELECTION ranks first; the letter accompanies that

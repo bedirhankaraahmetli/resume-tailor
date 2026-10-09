@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendRecord, parseRecords, setField } from "../src/csv";
+import { appendRecord, parseRecords, removeRecord, setField } from "../src/csv";
 
 const CSV = "date,company,position,status,request_id\r\n"
   + "2026-10-01,Acme,Data Analyst,applied,a1\r\n"
@@ -45,5 +45,26 @@ describe("setField", () => {
 
   it("names a missing column", () => {
     expect(() => setField(CSV, 0, rows[0]!, "nope", "x")).toThrow(/nope/);
+  });
+});
+
+describe("removeRecord", () => {
+  const rows = parseRecords(CSV);
+
+  it("removes exactly one record, line break included", () => {
+    const out = removeRecord(CSV, 1, rows[1]!);
+    expect(parseRecords(out)).toEqual([rows[0], rows[2]]);
+    expect(out).toBe(CSV.replace(/2026-10-02,.*?\r\n/, ""));
+  });
+
+  it("removes the last record and finds a moved one", () => {
+    expect(parseRecords(removeRecord(CSV, 2, rows[2]!))).toEqual([rows[0], rows[1]]);
+    const appended = appendRecord(CSV, { date: "2026-10-04", company: "Delta" });
+    expect(parseRecords(removeRecord(appended, 5, rows[0]!)).map((r) => r.company))
+      .toEqual(["Beta, Inc", "Gamma", "Delta"]);
+  });
+
+  it("refuses a row that is gone", () => {
+    expect(() => removeRecord(CSV, 0, { ...rows[0]!, status: "offer" })).toThrow(/changed/);
   });
 });

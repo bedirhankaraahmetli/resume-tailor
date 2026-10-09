@@ -163,6 +163,14 @@ def test_a_letter_that_fails_its_guard_never_costs_the_resumes(sample_dir: Path,
     job = load_queue(work).jobs[0]
     assert job.letter is None and not job.failed
     assert any(n.startswith("Cover letter skipped") and "0.97" in n for n in job.notices)
+    # Both answers are kept, with what the guard said, so a skipped letter can be read.
+    assert [len(a["violations"]) > 0 for a in job.letter_attempts] == [True, True]
+    assert run_queue_stage(sample_dir, work, "compile", providers={"anthropic": canned},
+                           log=lambda _m: None)
+    [res] = finish(sample_dir, work)
+    saved = json.loads((sample_dir / res.folder / "_build/llm-response.json")
+                       .read_text("utf-8"))
+    assert len(saved["letter_attempts"]) == 2 and "cover_en" not in res.files
 
 
 def test_stale_preset_request_with_nothing_stale_is_done(sample_dir: Path, tmp_path: Path,

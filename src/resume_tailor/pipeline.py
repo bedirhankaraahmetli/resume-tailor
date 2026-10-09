@@ -21,7 +21,7 @@ from .catalog import Catalog, build_catalog
 from .checks import ats_check, keyword_report
 from .config import Config, Preset, load_config
 from .fit import fit
-from .guard import check, check_letter
+from .guard import GuardResult, check, check_letter
 from .ledger import Ledger, append_application, now_utc, update_application
 from .letter import prepare_letter, render_letter
 from .llm_input import PROMPT_VERSION, analyze_call, letter_call, repair_prompt, tailor_call
@@ -138,6 +138,9 @@ class RunState:
     raw_tailoring: str | None = None
     repaired: list[str] = field(default_factory=list)
     letter: CoverLetter | None = None
+    # Every letter answer and what the guard said about it, saved with the outputs so a
+    # skipped letter can be diagnosed.
+    letter_attempts: list[dict[str, object]] = field(default_factory=list)
 
 
 def run(data_dir: Path, req: RunRequest, *, out_dir: Path | None,
@@ -274,14 +277,20 @@ def _letter(data_dir: Path, cat: Catalog, req: RunRequest, router: Router, state
                                model=req.model)
             letter, resp, provider = router.run(call, CoverLetter.model_validate_json)
             g = check_letter(cat, letter, langs)
+            state.letter_attempts.append(_attempt(letter, g))
             if not g.ok:
                 log(f"letter guard: {len(g.violations)} problem(s); asking for one repair…")
+                errors = [str(v) for v in g.violations]
+                if any(v.code == "number" for v in g.violations):
+                    errors.append("For a number that is not in the cited sources: delete the "
+                                  "number and the claim it makes. Citing another source does "
+                                  "not help unless that source's own text contains it.")
                 repair = LLMCall("repair", "tailor", call.system,
-                                 repair_prompt(call.user, resp.text,
-                                               [str(v) for v in g.violations]),
+                                 repair_prompt(call.user, resp.text, errors),
                                  CoverLetter, call.model_override)
                 letter, _ = router.call_on(provider, repair, CoverLetter.model_validate_json)
                 g = check_letter(cat, letter, langs)
+                state.letter_attempts.append(_attempt(letter, g))
     except Exception as e:  # never lose the resumes over the optional letter
         router.notices.append(f"Cover letter skipped: {describe(e)}")
         return
@@ -347,9 +356,13 @@ def _compile(data_dir: Path, config: Config, req: RunRequest, router: Router,
                                    work, log)
         _write_outputs(data_dir, config, cat, req, analysis, tailoring, final, fitted.log,
                        info, keywords, warnings, router, result, out_dir, work,
-                       state.raw_tailoring, letters)
+                       state.raw_tailoring, letters, state.letter_attempts)
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def _attempt(letter: CoverLetter, g: GuardResult) -> dict[str, object]:
+    return {"letter": letter.model_dump(), "violations": [str(v) for v in g.violations]}
 
 
 def _compile_letters(data_dir: Path, config: Config, req: RunRequest, analysis: Analysis,
@@ -387,7 +400,8 @@ def _write_outputs(data_dir: Path, config: Config, cat: Catalog, req: RunRequest
                    fit_log: list[str], info: dict[str, PdfInfo], keywords: object,
                    warnings: list[str], router: Router, result: RunResult,
                    out_dir: Path | None, work: Path, raw: str | None,
-                   letters: dict[str, Path] | None = None) -> None:
+                   letters: dict[str, Path] | None = None,
+                   letter_attempts: list[dict[str, object]] | None = None) -> None:
     from .checks import KeywordReport
 
     letters = letters or {}
@@ -431,6 +445,7 @@ def _write_outputs(data_dir: Path, config: Config, cat: Catalog, req: RunRequest
         "tailoring_proposed": json.loads(raw) if raw else proposed.model_dump(),
         "tailoring_final": final.model_dump(),
         "fit_log": fit_log,
+        **({"letter_attempts": letter_attempts} if letter_attempts else {}),
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
     kr = keywords if isinstance(keywords, KeywordReport) else None

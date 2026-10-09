@@ -13,6 +13,7 @@ import {
 } from "../save";
 import { submit } from "../requests";
 import type { ApplicationRequest, RunResult, View } from "../types";
+import { deleteApplication, deletePrompt } from "./history";
 import { LETTER_HINT, PROVIDERS, letterChoice, letterSelect } from "./new";
 
 interface Located {
@@ -117,7 +118,9 @@ export async function showFolder(view: View, gh: GitHub, folder: string,
       .catch((e: unknown) => clear(frame, notice("warn", `Preview unavailable: ${errorText(e)}`)));
   }
 
-  if (folder.startsWith("applications/")) view.el.append(regenerateCard(gh, folder, result));
+  if (folder.startsWith("applications/")) {
+    view.el.append(regenerateCard(gh, folder, result), deleteRow(gh, folder));
+  }
 
   if (result) {
     const n = noticesList(result.notices);
@@ -240,4 +243,20 @@ function regenerateCard(gh: GitHub, folder: string, result?: RunResult): HTMLEle
     })();
   });
   return card;
+}
+
+function deleteRow(gh: GitHub, folder: string): HTMLElement {
+  const out = h("div");
+  const del = h("button", { class: "link danger" }, "Delete this application");
+  del.addEventListener("click", busy(del, out, async () => {
+    const csv = await gh.getText("applications.csv");
+    const rows = csv ? parseRecords(csv.text) : [];
+    const name = basename(folder);
+    const index = rows.map((r) => r.folder).lastIndexOf(name);
+    if (index < 0) throw new Error("This folder has no row in History.");
+    if (!confirm(deletePrompt(rows[index]!))) return;
+    await deleteApplication(gh, rows[index]!, index, rows);
+    location.hash = "#/history";
+  }));
+  return h("div", { class: "stack" }, del, out);
 }

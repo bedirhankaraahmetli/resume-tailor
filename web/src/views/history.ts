@@ -1,8 +1,9 @@
 // History: applications.csv, newest first, each row linking to its files.
 
-import { parseRecords, setField } from "../csv";
-import { clear, errorText, h, notice } from "../dom";
+import { parseRecords, removeRecord, setField } from "../csv";
+import { busy, clear, errorText, h, notice } from "../dom";
 import { GitHubError, type GitHub } from "../github";
+import { ID_RE } from "../ids";
 import type { View } from "../types";
 
 /** The repo folder holding a row's files. Preset-based rows point at the preset. */
@@ -32,7 +33,16 @@ export async function showHistory(view: View, gh: GitHub): Promise<void> {
     h("ul", { class: "cards history" }, rows.map((r) => {
       const folder = rowFolder(r);
       const title = `${r.company || "–"} – ${r.position || "–"}`;
-      return h("li", { class: "card" },
+      const { __i, ...row } = r;
+      const out = h("div");
+      const del = h("button", { class: "link danger small" }, "Delete");
+      let card: HTMLElement | null = null;
+      del.addEventListener("click", busy(del, out, async () => {
+        if (!confirm(deletePrompt(row))) return;
+        await deleteApplication(gh, row, Number(__i), rows.map(({ __i: _, ...x }) => x));
+        card?.replaceWith(h("li", { class: "card" }, notice("ok", `Deleted ${title}.`)));
+      }));
+      card = h("li", { class: "card" },
         h("div", { class: "card-head" },
           folder
             ? h("a", { href: `#/folder/${encodeURIComponent(folder)}` }, title)
@@ -44,7 +54,9 @@ export async function showHistory(view: View, gh: GitHub): Promise<void> {
           r.cost_usd ? `$${r.cost_usd}` : null,
           r.source === "base" ? "base resume"
             : r.source?.startsWith("preset:") ? `preset ${r.source.slice(7)}` : r.provider,
-        ].filter(Boolean).join(" · ")));
+        ].filter(Boolean).join(" · ")),
+        del, out);
+      return card;
     })));
 }
 
@@ -90,4 +102,40 @@ function statusPicker(gh: GitHub, row: Record<string, string>): HTMLElement {
     }).finally(() => { select.disabled = false; });
   });
   return h("span", { class: "status-edit" }, select, out);
+}
+
+/** A tailored application owns its folder; preset and base rows only point at shared files. */
+function ownsFolder(row: Record<string, string>): string | null {
+  const folder = rowFolder(row);
+  return folder?.startsWith("applications/") ? folder : null;
+}
+
+export function deletePrompt(row: Record<string, string>): string {
+  const what = `${row.company || "–"} – ${row.position || "–"}`;
+  return ownsFolder(row)
+    ? `Delete ${what}?\n\nThis removes its History row, its PDFs and report, and its request `
+      + "from your data repo. Git history keeps a copy."
+    : `Remove ${what} from History?\n\nThe preset or base resume it used is not touched.`;
+}
+
+/**
+ * Deletes one application in one commit: its applications.csv row and, for a tailored
+ * run, its folder plus its request and result files. Both of those go together: a request
+ * without a result counts as pending, and the workflow would build it again.
+ * `all` is History's rows, to keep a folder that another row still points at.
+ */
+export async function deleteApplication(gh: GitHub, row: Record<string, string>,
+                                        index: number,
+                                        all: Record<string, string>[]): Promise<void> {
+  const folder = ownsFolder(row);
+  const shared = all.filter((r) => r.folder === row.folder).length > 1;
+  const removeUnder = folder && !shared ? [folder] : [];
+  const rid = row.request_id ?? "";
+  const extra = folder && ID_RE.test(rid) ? [`requests/${rid}.json`, `results/${rid}.json`] : [];
+  await gh.commitFiles(["applications.csv"],
+    `delete: ${row.company || "–"} - ${row.position || "–"}`,
+    (files) => new Map<string, string | null>([
+      ["applications.csv", removeRecord(files.get("applications.csv")!, index, row)],
+      ...extra.map((p): [string, null] => [p, null]),
+    ]), removeUnder);
 }

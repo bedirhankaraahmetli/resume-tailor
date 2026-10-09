@@ -93,6 +93,28 @@ function recordSpans(text: string): [number, number][] {
   return spans;
 }
 
+/** The data row matching `original`, preferring position `index`; -1 if it is gone. */
+function findRecord(rows: string[][], index: number, original: Record<string, string>): number {
+  const header = rows[0] ?? [];
+  const same = (r: string[] | undefined): boolean =>
+    !!r && header.every((h, i) => (r[i] ?? "") === (original[h] ?? ""));
+  if (same(rows[index + 1])) return index + 1;
+  return rows.findIndex((r, i) => i > 0 && same(r));
+}
+
+/** Removes one record, line break included, and leaves every other byte alone. */
+export function removeRecord(text: string, index: number,
+                             original: Record<string, string>): string {
+  const src = text.replace(/^\uFEFF/, "");
+  const bom = text.length - src.length;
+  const at = findRecord(parseCsv(src), index, original);
+  if (at < 1) throw new Error("That application changed in the meantime. Reload History.");
+  const [a] = recordSpans(src)[at]!;
+  const next = recordSpans(src)[at + 1];
+  const end = next ? next[0] : src.length;
+  return text.slice(0, bom + a) + text.slice(bom + end);
+}
+
 /**
  * Sets one field of one record and leaves every other byte alone. The record is found by
  * its full content, preferring `index` (its position among the data rows), so a row the
