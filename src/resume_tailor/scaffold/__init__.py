@@ -80,7 +80,9 @@ def init_data_repo(path: Path, *, tool_repo: str, tool_ref: str,
     if missing:
         body = "\n".join(have).rstrip()
         add = "\n".join(missing)
-        gitignore.write_text((body + "\n\n" if body else "") + add + "\n", encoding="utf-8")
+        # newline="\n": on Windows write_text would turn every existing line into CRLF.
+        gitignore.write_text((body + "\n\n" if body else "") + add + "\n", encoding="utf-8",
+                             newline="\n")
         log.append(f"updated   .gitignore (+{len(missing)} line(s))")
     else:
         log.append("kept      .gitignore")
