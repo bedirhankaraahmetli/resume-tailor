@@ -209,6 +209,18 @@ Added by the owner:
     the last `skill_names_tr:` entry, and test against the real file's shape.
   - **Pending:** the owner has three skills to add: Data Analysis, Documentation and
     Willingness to Learn.
+  - **Built (2026-10-09), not yet used live:** `web/src/skills.ts` (pure; mirrors
+    `split_terms`, the §6 table, the never-claim line and `fold`) and
+    `GitHub.commitFiles` (Git Data API: tree → commit → fast-forward-only ref update,
+    re-read and retry on 409/422). The checks run again on the files at the commit they
+    edit.
+    - Exact duplicates, never-claim terms (whole words, either direction), an existing
+      `skill_names_tr` key, and multi-skill names (commas, brackets, ` + `, ` / `) are
+      errors. A shared word of 4+ letters, or one name inside the other, is a warning
+      that needs a confirm.
+    - Cross-checked on scratch copies of the real files: each edit adds exactly one
+      line, and the Python parser and PyYAML read all three pending skills back.
+      "Data Analysis" warns about "Data Visualization"; the other two pass cleanly.
 
 Declined by the owner:
 - LinkedIn link import and a bookmarklet. Postings stay pasted.

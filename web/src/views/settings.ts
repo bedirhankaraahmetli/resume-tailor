@@ -5,6 +5,7 @@ import { GitHub, GitHubError, type Secret } from "../github";
 import {
   forget, github, keyExpiry, lock, saveSettings, sessionToken, setKeyExpiry, settings, unlock,
 } from "../store";
+import { addSkillNameTr, addSkillRow, checkSkill, type NewSkill } from "../skills";
 import type { View } from "../types";
 
 const REPO_RE = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
@@ -35,6 +36,7 @@ export function showSettings(view: View, flash: HTMLElement[] = []): void {
     ...flash,
     connection(s?.repo ?? "", Boolean(gh), (msg) => showSettings(view, msg)),
     gh ? keysPanel(view, gh) : null,
+    gh ? skillsPanel(gh) : null,
     tokenHelp(),
     claudeHelp(),
     privacyNote());
@@ -169,6 +171,62 @@ function keyRow(gh: GitHub, k: (typeof KEYS)[number], secret: Secret | undefined
     field(`New value for ${k.name}`, value),
     field("Expires on (optional, for a reminder)", expiry),
     save, out);
+}
+
+const INVENTORY = "career-inventory.md";
+const CONFIG = "config.yml";
+
+/**
+ * Adds one skill: a row in the inventory's §6 table and its Turkish name in config.yml, in
+ * one commit. The checks run again on the files as they are at that commit.
+ */
+function skillsPanel(gh: GitHub): HTMLElement {
+  const name = input("skill-name", { placeholder: "Data Analysis", autocapitalize: "words" });
+  const tr = input("skill-tr", { placeholder: "Veri Analizi", autocapitalize: "words" });
+  const evidence = input("skill-evidence", { placeholder: "Pandas in FireGuard, MuviNight" });
+  const out = h("div");
+  const add = h("button", { class: "primary", type: "submit" }, "Add skill");
+
+  const form = h("form", { class: "card stack" },
+    h("h2", null, "Skills"),
+    h("p", { class: "hint" }, "Adds a skill to your career inventory, so tailored resumes "
+      + "may use it when a posting asks for it. Only add what you can back up in an interview."),
+    field("Skill (English, Title Case)", name),
+    field("Turkish name", tr, "Shown on the Turkish resume."),
+    field("Evidence", evidence, "Where you used it: a project, a course, a certificate."),
+    add, out);
+
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    busy(add, out, async () => {
+      const skill: NewSkill = { name: name.value.trim(), tr: tr.value.trim(),
+        evidence: evidence.value.trim() };
+      let confirmed = false;
+      const commit = await gh.commitFiles([INVENTORY, CONFIG], `skills: add ${skill.name}`,
+        (files) => {
+          const inv = files.get(INVENTORY)!;
+          const cfg = files.get(CONFIG)!;
+          const { errors, warnings } = checkSkill(skill, inv, cfg);
+          if (errors.length) throw new Error(errors.join(" "));
+          if (warnings.length && !confirmed) {
+            if (!confirm(`${warnings.join("\n")}\n\nAdd “${skill.name}” anyway?`)) {
+              throw new Error("Not added.");
+            }
+            confirmed = true;
+          }
+          return new Map([[INVENTORY, addSkillRow(inv, skill)],
+            [CONFIG, addSkillNameTr(cfg, skill)]]);
+        });
+      name.value = tr.value = evidence.value = "";
+      clear(out, notice("ok", `Added ${skill.name} (${skill.tr}). `,
+        h("a", { href: `https://github.com/${gh.repo}/commit/${commit}`, target: "_blank",
+          rel: "noopener noreferrer" }, "See the commit")),
+      notice("info", "New tailored resumes can use it from now on. The presets are now "
+        + "outdated: rebuild them in Quick apply when you want them to include it. The base "
+        + "resumes do not change."));
+    })();
+  });
+  return form;
 }
 
 function tokenHelp(): HTMLElement {

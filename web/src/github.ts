@@ -82,14 +82,16 @@ export class GitHub {
     return { private: r.private, defaultBranch: r.default_branch, push: !!r.permissions?.push };
   }
 
-  async getText(path: string): Promise<{ text: string; sha: string } | null> {
-    const res = await this.request(this.repoPath(`/contents/${encodePath(path)}`),
+  /** `ref` reads the file as of a commit, so edits can be based on exactly that commit. */
+  async getText(path: string, ref?: string): Promise<{ text: string; sha: string } | null> {
+    const at = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+    const res = await this.request(this.repoPath(`/contents/${encodePath(path)}${at}`),
       `read ${path}`, { allow404: true });
     if (!res) return null;
     const j = (await res.json()) as { content?: string; sha: string; encoding?: string };
     if (j.content === undefined || j.encoding !== "base64") {
       // Files over 1 MB come without content; fetch them raw.
-      const raw = await this.getBytes(path);
+      const raw = await this.getBytes(path, ref);
       return raw ? { text: fromUtf8(raw), sha: j.sha } : null;
     }
     return { text: fromUtf8(fromBase64(j.content)), sha: j.sha };
@@ -100,8 +102,9 @@ export class GitHub {
     return f ? (JSON.parse(f.text) as T) : null;
   }
 
-  async getBytes(path: string): Promise<Uint8Array | null> {
-    const res = await this.request(this.repoPath(`/contents/${encodePath(path)}`),
+  async getBytes(path: string, ref?: string): Promise<Uint8Array | null> {
+    const at = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+    const res = await this.request(this.repoPath(`/contents/${encodePath(path)}${at}`),
       `download ${path}`, { allow404: true, accept: "application/vnd.github.raw+json" });
     return res ? new Uint8Array(await res.arrayBuffer()) : null;
   }
@@ -123,6 +126,55 @@ export class GitHub {
       });
     const j = (await res!.json()) as { commit: { sha: string } };
     return j.commit.sha;
+  }
+
+  /**
+   * Several files in one commit, through the Git Data API (the Contents API writes one file
+   * per commit). `edit` gets the files as of the branch head and returns their new text.
+   * The ref moves only as a fast-forward, so a commit that landed in between (the workflow
+   * writes too) makes it fail with 422; then it re-reads, re-applies and retries (§2.10).
+   */
+  async commitFiles(paths: string[], message: string,
+                    edit: (files: Map<string, string>) => Map<string, string>): Promise<string> {
+    const { defaultBranch } = await this.checkAccess();
+    const ref = `heads/${defaultBranch.split("/").map(encodeURIComponent).join("/")}`;
+    for (let attempt = 1; ; attempt++) {
+      const head = await this.json<{ object: { sha: string } }>(`/git/ref/${ref}`,
+        "read the branch");
+      const commit = await this.json<{ tree: { sha: string } }>(
+        `/git/commits/${head.object.sha}`, "read the latest commit");
+      const files = new Map<string, string>();
+      for (const p of paths) {
+        const f = await this.getText(p, head.object.sha);
+        if (!f) throw new GitHubError(404, `${p} is missing from the data repo.`);
+        files.set(p, f.text);
+      }
+      const changed = edit(files);
+      const tree = await this.json<{ sha: string }>("/git/trees", "write the files", {
+        method: "POST",
+        body: JSON.stringify({ base_tree: commit.tree.sha, tree: [...changed].map(
+          ([path, content]) => ({ path, mode: "100644", type: "blob", content })) }),
+      });
+      const next = await this.json<{ sha: string }>("/git/commits", "create the commit", {
+        method: "POST",
+        body: JSON.stringify({ message, tree: tree.sha, parents: [head.object.sha] }),
+      });
+      try {
+        await this.request(this.repoPath(`/git/refs/${ref}`), "move the branch", {
+          method: "PATCH", body: JSON.stringify({ sha: next.sha, force: false }),
+        });
+        return next.sha;
+      } catch (e) {
+        const conflict = e instanceof GitHubError && (e.status === 409 || e.status === 422);
+        if (!conflict || attempt >= 4) throw e;
+        await new Promise((r) => setTimeout(r, 800 * attempt));
+      }
+    }
+  }
+
+  private async json<T>(rest: string, what: string, init: RequestInit = {}): Promise<T> {
+    const res = await this.request(this.repoPath(rest), what, init);
+    return (await res!.json()) as T;
   }
 
   async runsForCommit(sha: string): Promise<WorkflowRun[]> {
