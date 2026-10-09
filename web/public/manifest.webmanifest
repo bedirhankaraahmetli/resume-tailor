@@ -1,0 +1,9 @@
+{
+  "name": "Resume Tailor",
+  "short_name": "Tailor",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f7f6",
+  "theme_color": "#1f6f5c",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

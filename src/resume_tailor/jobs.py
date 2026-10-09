@@ -40,6 +40,7 @@ from .pipeline import (
     write_result,
 )
 from .presets import status as preset_status
+from .presets import write_status_report
 from .providers.base import LLMResponse, Provider, Usage
 from .router import Router
 
@@ -304,6 +305,9 @@ def finish(data_dir: Path, work: Path) -> list[RunResult]:
             )
         write_result(data_dir, res)
         results.append(res)
+    # Every run refreshes this, including runs with no request: the data repo's workflow
+    # also starts when base/, the inventory or presets.yml change, just to update it.
+    write_status_report(data_dir)
     return results
 
 
@@ -318,7 +322,7 @@ def commit_message(results: list[RunResult]) -> str:
         else:
             what = (r.folder or r.id).removeprefix("applications/")
         parts.append(what if r.status == "done" else f"{what} (failed)")
-    return "tailor: " + "; ".join(parts) if parts else "tailor: nothing to do"
+    return "tailor: " + "; ".join(parts) if parts else "tailor: refresh preset status"
 
 
 def summary_markdown(results: list[RunResult]) -> str:

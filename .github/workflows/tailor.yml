@@ -109,9 +109,10 @@ jobs:
         run: tailor request compile --data-dir data --work "$WORK"
 
       # Always runs, so a failed or timed-out request still gets results/<id>.json and is
-      # not picked up (and paid for) again by the next run.
+      # not picked up (and paid for) again by the next run. With nothing queued it still
+      # refreshes presets/status.json, which the web app reads.
       - name: Publish
-        if: ${{ always() && steps.queue.outputs.jobs != '0' }}
+        if: ${{ always() && steps.queue.outcome == 'success' }}
         working-directory: data
         run: |
           tailor request finish --data-dir . --work "$WORK" --message-file "$RUNNER_TEMP/msg.txt"

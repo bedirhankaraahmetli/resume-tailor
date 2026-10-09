@@ -5,7 +5,9 @@ name: tailor
 on:
   push:
     branches: [main]
-    paths: ["requests/**.json"]
+    # requests/ starts a build. The others only refresh presets/status.json (no LLM call),
+    # so the web app's Quick apply tab sees a preset go out of date.
+    paths: ["requests/**.json", "base/**", "career-inventory.md", "presets.yml"]
   workflow_dispatch:
     inputs:
       request:

@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 from typing import Literal
 
-from .config import Preset
+from .config import Preset, load_presets
 from .ledger import now_utc
 from .models import PresetManifest
 
@@ -83,3 +83,29 @@ def write_manifest(data_dir: Path, preset: Preset, provider: str, model: str, co
     path = manifest_path(data_dir, preset)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(m.model_dump_json(indent=2), encoding="utf-8")
+
+
+def status_report(data_dir: Path) -> dict[str, object]:
+    """Every preset's status, for the web app (it cannot hash the inputs itself: that
+    needs the YAML entry in Python's canonical form). Written to `presets/status.json`."""
+    rows: list[dict[str, object]] = []
+    for p in load_presets(data_dir).presets:
+        m = read_manifest(data_dir, p)
+        rows.append({
+            "id": p.id, "folder": p.folder, "position": p.position,
+            "status": status(data_dir, p),
+            "changed": changed_inputs(data_dir, p),
+            "built_at": m.built_at if m else None,
+            "provider": m.provider if m else None,
+            "model": m.model if m else None,
+            "cost_usd": m.cost_usd if m else None,
+            "files": m.files if m else {},
+        })
+    return {"presets": rows}
+
+
+def write_status_report(data_dir: Path) -> None:
+    path = data_dir / "presets" / "status.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(status_report(data_dir), ensure_ascii=False, indent=2) + "\n"
+    path.write_text(text, encoding="utf-8", newline="\n")

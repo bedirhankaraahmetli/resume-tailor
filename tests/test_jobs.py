@@ -214,4 +214,14 @@ def test_commit_message_shapes() -> None:
     bad = RunResult(id="b-1", status="failed")
     assert commit_message([ok]) == "tailor: ABC Firm - Data Scientist"
     assert commit_message([ok, bad]) == "tailor: ABC Firm - Data Scientist; b-1 (failed)"
-    assert commit_message([]) == "tailor: nothing to do"
+    assert commit_message([]) == "tailor: refresh preset status"
+
+
+def test_finish_writes_preset_status_even_with_no_requests(sample_dir: Path,
+                                                          tmp_path: Path) -> None:
+    start(sample_dir, tmp_path / "work")
+    assert finish(sample_dir, tmp_path / "work") == []
+    report = json.loads((sample_dir / "presets/status.json").read_text("utf-8"))
+    assert [p["id"] for p in report["presets"]] == ["data-science-ml", "ios-mobile", "backend"]
+    assert report["presets"][0]["status"] == "never built"
+    assert report["presets"][0]["built_at"] is None

@@ -28,7 +28,7 @@ def test_fresh_repo_is_complete_and_valid(tmp_path: Path) -> None:
     assert job["with"]["tool-ref"] == REF
     assert wf["concurrency"] == {"group": "tailor", "cancel-in-progress": False}
     # PyYAML reads the `on:` key as True
-    assert wf[True]["push"]["paths"] == ["requests/**.json"]
+    assert wf[True]["push"]["paths"][0] == "requests/**.json"
     assert "{{TOOL_" not in (repo / ".github/workflows/tailor.yml").read_text("utf-8")
 
 

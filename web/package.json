@@ -1,0 +1,25 @@
+{
+  "name": "resume-tailor-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "blakejs": "1.2.1",
+    "pdfjs-dist": "6.4.299",
+    "tweetnacl": "1.0.3"
+  },
+  "devDependencies": {
+    "@types/libsodium-wrappers": "0.7.14",
+    "libsodium-wrappers": "0.8.4",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  }
+}
