@@ -61,6 +61,33 @@ repo root is the companion contract.
   `response_json_schema`. The SDK does not honour `retryDelay`, so we parse RetryInfo
   ourselves.
 
+**API key management** (owner request, 2026-10-09):
+
+- **CLI (built in Phase 1).**
+  - `tailor keys list` shows each key, masked, and where it comes from.
+  - `tailor keys set <provider>` takes the key as hidden input. It verifies it with a free
+    model-list call and saves it to `.env`. With `--github OWNER/REPO` it also stores the
+    key as an Actions secret through `gh secret set` (the value goes over stdin only).
+  - `tailor keys check` re-verifies the stored keys; `tailor keys remove` deletes one.
+- **Web app (Phase 3): Settings → API keys.** One write-only field per provider
+  (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`). It shows whether each
+  secret exists and when it was last updated, from `GET /repos/{repo}/actions/secrets`,
+  which returns names and dates, never values.
+  - **Saving:** fetch the repo's Actions public key, encrypt the value in the browser
+    with a libsodium sealed box (bundled, never loaded from a CDN), then `PUT` the secret.
+    The value lives only in the form field until it is sent, and is never written to
+    localStorage, IndexedDB or a log.
+  - **This needs one more PAT permission:** "Secrets: Read and write" on the data repo.
+    It is optional. Without it the panel shows a link to the repo's secrets settings
+    page instead.
+  - **Deliberate exception to "keys never reach the browser":** a key typed here passes
+    through the page once, on its way to GitHub. It is still never stored or readable
+    there. Reading a key back is impossible by GitHub's design, so the panel can only
+    replace a key.
+  - **Expiry reminder:** the panel can't know when a key expires, so the owner can
+    record an optional "expires on" date per key (stored in localStorage, not secret).
+    The panel warns 3 days before it.
+
 **Layout change from §4.1:** modules are flat (`models.py`, `guard.py`, `fit.py`, …)
 instead of sub-packages, except `providers/`. `init-data-repo`, the reusable workflow and
 the caller template are Phase 2.

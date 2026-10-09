@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import os
 import sys
 import tempfile
@@ -16,6 +17,17 @@ from .catalog import build_catalog
 from .config import load_config, load_presets
 from .guard import check as guard_check
 from .identity import identity_tailoring, normalize_tex
+from .keys import (
+    PROVIDER_VARS,
+    KeyError_,
+    check_live,
+    mask,
+    push_to_github,
+    read_env,
+    validate_value,
+    write_env,
+)
+from .keys import status as keys_status
 from .ledger import now_utc
 from .naming import default_out_dir
 from .pipeline import RunRequest, run
@@ -28,7 +40,8 @@ def _load_dotenv(path: Path) -> None:
     """Minimal .env reader (KEY=VALUE lines); existing environment variables win."""
     if not path.exists():
         return
-    for line in path.read_text(encoding="utf-8").splitlines():
+    # utf-8-sig: Notepad may save .env with a BOM, which would corrupt the first key name.
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -167,6 +180,75 @@ def cmd_preset_build(a: argparse.Namespace) -> int:
     return rc
 
 
+def cmd_keys_list(a: argparse.Namespace) -> int:
+    path = Path(a.env_file)
+    print(f"keys in {path.resolve()}")
+    for s in keys_status(path):
+        where = {"missing": "not set", ".env": f"{s.masked}  (.env)",
+                 "environment": f"{s.masked}  (environment variable)"}[s.source]
+        print(f"  {s.provider:12} {s.var:24} {where}")
+    return 0
+
+
+def cmd_keys_set(a: argparse.Namespace) -> int:
+    var = PROVIDER_VARS[a.provider]
+    if a.stdin:
+        value = sys.stdin.readline().strip()
+    else:
+        value = getpass.getpass(f"Paste the new {var} (input is hidden): ").strip()
+    try:
+        validate_value(var, value)
+    except KeyError_ as e:
+        print(f"not saved: {e}", file=sys.stderr)
+        return 2
+    if not a.no_check:
+        ok, msg = check_live(a.provider, value)
+        print(f"check: {msg}")
+        if not ok:
+            print("not saved. Use --no-check to save it anyway.", file=sys.stderr)
+            return 1
+    path = Path(a.env_file)
+    write_env(path, var, value)
+    os.environ[var] = value
+    print(f"saved {var} = {mask(value)} to {path.resolve()}")
+    if a.github:
+        try:
+            push_to_github(var, value, a.github)
+        except KeyError_ as e:
+            print(f"GitHub: {e}", file=sys.stderr)
+            return 1
+        print(f"GitHub: stored as Actions secret {var} in {a.github}")
+    return 0
+
+
+def cmd_keys_remove(a: argparse.Namespace) -> int:
+    var = PROVIDER_VARS[a.provider]
+    path = Path(a.env_file)
+    if var not in read_env(path):
+        print(f"{var} is not in {path}")
+        return 0
+    write_env(path, var, None)
+    print(f"removed {var} from {path.resolve()}")
+    return 0
+
+
+def cmd_keys_check(a: argparse.Namespace) -> int:
+    path = Path(a.env_file)
+    values = read_env(path)
+    rc = 0
+    for provider, var in PROVIDER_VARS.items():
+        if a.provider and provider != a.provider:
+            continue
+        value = values.get(var) or os.environ.get(var, "")
+        if not value:
+            print(f"  {provider:12} not set")
+            continue
+        ok, msg = check_live(provider, value)
+        print(f"  {provider:12} {mask(value)}  {msg}")
+        rc |= 0 if ok else 1
+    return rc
+
+
 def main(argv: list[str] | None = None) -> int:
     # The Windows console defaults to a legacy code page that cannot print Turkish.
     for stream in (sys.stdout, sys.stderr):
@@ -211,6 +293,28 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--note")
     pb.add_argument("--out")
     pb.set_defaults(fn=cmd_preset_build)
+
+    k = sub.add_parser("keys", help="add, change, check or remove API keys")
+    ksub = k.add_subparsers(dest="kcmd", required=True)
+    providers = list(PROVIDER_VARS)
+    kl = ksub.add_parser("list", help="show which keys are set (masked)")
+    kl.set_defaults(fn=cmd_keys_list)
+    ks = ksub.add_parser("set", help="add or replace a key (typed hidden, then verified)")
+    ks.add_argument("provider", choices=providers)
+    ks.add_argument("--stdin", action="store_true", help="read the key from stdin")
+    ks.add_argument("--github", metavar="OWNER/REPO",
+                    help="also store it as a GitHub Actions secret in this repo")
+    ks.add_argument("--no-check", action="store_true", help="skip the free validity check")
+    ks.set_defaults(fn=cmd_keys_set)
+    kr = ksub.add_parser("remove", help="delete a key from the .env file")
+    kr.add_argument("provider", choices=providers)
+    kr.set_defaults(fn=cmd_keys_remove)
+    kc = ksub.add_parser("check", help="verify the stored keys with a free call")
+    kc.add_argument("provider", nargs="?", choices=providers)
+    kc.set_defaults(fn=cmd_keys_check)
+    for kp in (kl, ks, kr, kc):
+        kp.add_argument("--env-file", default=".env",
+                        help="file to read/write (default: .env in the current folder)")
 
     a = ap.parse_args(argv)
     if a.cmd == "run" and not a.posting and not a.dry_run:
