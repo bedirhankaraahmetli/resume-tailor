@@ -197,6 +197,11 @@ def cmd_request_start(a: argparse.Namespace) -> int:
     for rid in requests:
         print(f"  {rid}")
     _gh_append("GITHUB_OUTPUT", f"jobs={len(q.jobs)}\n")
+    from .basepdf import status as base_status
+
+    stale = base_status(Path(a.data_dir)) != "up to date"
+    print(f"base PDFs: {'need a rebuild' if stale else 'up to date'}")
+    _gh_append("GITHUB_OUTPUT", f"base={'stale' if stale else 'ok'}\n")
     return 0
 
 
@@ -216,6 +221,18 @@ def cmd_request_finish(a: argparse.Namespace) -> int:
     print(msg)
     if results:
         _gh_append("GITHUB_STEP_SUMMARY", summary_markdown(results))
+    return 0
+
+
+def cmd_base_build(a: argparse.Namespace) -> int:
+    from .basepdf import FOLDER, build, status
+
+    data = Path(a.data_dir)
+    if a.if_stale and status(data) == "up to date":
+        print("base PDFs are up to date")
+        return 0
+    names = build(data)
+    print(f"built {FOLDER}/{names['en']} and {FOLDER}/{names['tr']}")
     return 0
 
 
@@ -346,6 +363,13 @@ def main(argv: list[str] | None = None) -> int:
     pb.add_argument("--note")
     pb.add_argument("--out")
     pb.set_defaults(fn=cmd_preset_build)
+
+    b = sub.add_parser("base", help="the untailored base resumes as PDFs")
+    bsub = b.add_subparsers(dest="bcmd", required=True)
+    bb = bsub.add_parser("build", help="compile base/en and base/tr into base-pdf/")
+    bb.add_argument("--data-dir", required=True)
+    bb.add_argument("--if-stale", action="store_true", help="skip if base/ has not changed")
+    bb.set_defaults(fn=cmd_base_build)
 
     i = sub.add_parser("init-data-repo", help="scaffold a private data repo")
     i.add_argument("path")

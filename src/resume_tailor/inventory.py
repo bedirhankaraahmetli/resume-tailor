@@ -112,7 +112,8 @@ def split_terms(s: str) -> list[str]:
     out: list[str] = []
 
     def add(name: str) -> None:
-        name = name.strip().strip(".").strip()
+        # Trailing dots only: a sentence period goes, the dot of ".NET" stays.
+        name = name.strip().rstrip(".").strip()
         # Language codes inside "(EN + TR)" describe a feature, not a technology.
         if not name or len(name) > 40 or name in {"EN", "TR"}:
             return

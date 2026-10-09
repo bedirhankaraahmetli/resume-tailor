@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from resume_tailor.build import find_pdflatex
+from resume_tailor.config import load_presets
 from resume_tailor.jobs import (
     commit_message,
     finish,
@@ -225,3 +226,25 @@ def test_finish_writes_preset_status_even_with_no_requests(sample_dir: Path,
     assert [p["id"] for p in report["presets"]] == ["data-science-ml", "ios-mobile", "backend"]
     assert report["presets"][0]["status"] == "never built"
     assert report["presets"][0]["built_at"] is None
+    assert report["base"]["status"] == "never built"
+
+
+@needs_tex
+def test_base_pdfs_build_once_and_go_stale_with_base(sample_dir: Path) -> None:
+    from pypdf import PdfReader
+
+    from resume_tailor import basepdf
+    from resume_tailor.presets import status as preset_status
+
+    preset = load_presets(sample_dir).presets[0]
+    before = preset_status(sample_dir, preset)
+    names = basepdf.build(sample_dir)
+    assert names == {"en": "Deniz_Yilmaz_Resume.pdf", "tr": "Deniz_Yilmaz_Ozgecmis.pdf"}
+    for n in names.values():
+        assert len(PdfReader(sample_dir / "base-pdf" / n).pages) == 1
+    assert basepdf.status(sample_dir) == "up to date"
+    # base-pdf/ is outside base/, so building it does not stale the presets
+    assert preset_status(sample_dir, preset) == before
+    tex = sample_dir / "base/en/src/skills.tex"
+    tex.write_text(tex.read_text("utf-8") + "\n% edit\n", encoding="utf-8")
+    assert basepdf.status(sample_dir) == "outdated"

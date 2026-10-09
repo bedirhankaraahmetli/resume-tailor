@@ -66,6 +66,12 @@ def test_split_terms() -> None:
     ]
 
 
+def test_split_terms_keeps_a_leading_dot() -> None:
+    assert split_terms(".NET Framework, Tkinter.") == [".NET Framework", "Tkinter"]
+    assert split_terms("Object-oriented programming (OOP)") == [
+        "Object-oriented programming", "OOP"]
+
+
 def test_strip_contact_section() -> None:
     out = strip_contact_section(_sample())
     assert "## 1." not in out and "555 010" not in out and "## 2. Education" in out

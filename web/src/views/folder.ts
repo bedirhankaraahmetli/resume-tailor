@@ -28,9 +28,11 @@ async function locate(gh: GitHub, folder: string): Promise<Located | null> {
   };
 }
 
-/** `applications/X` → `X`; `presets/X` → `_Presets/X` (PROMPT.md §9). */
+/** `applications/X` → `X`; `presets/X` → `_Presets/X` (PROMPT.md §9);
+ * `base-pdf` → `_Base`. */
 export function localSubfolder(folder: string): string[] {
   const [top, ...rest] = folder.split("/");
+  if (top === "base-pdf") return ["_Base"];
   return top === "presets" ? ["_Presets", ...rest] : rest;
 }
 
@@ -55,7 +57,7 @@ export function noticesList(notices: string[]): HTMLElement | null {
 
 export async function showFolder(view: View, gh: GitHub, folder: string,
                                  result?: RunResult): Promise<void> {
-  const title = basename(folder);
+  const title = folder === "base-pdf" ? "Base resume" : basename(folder);
   const status = h("div", null, notice("info", "Loading files…"));
   clear(view.el, h("h1", null, title), result ? resultSummary(result) : null, status);
 

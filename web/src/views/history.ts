@@ -10,6 +10,7 @@ export function rowFolder(row: Record<string, string>): string | null {
   const folder = row.folder ?? "";
   if (!folder) return null;
   if (folder.startsWith("_Presets/")) return `presets/${folder.slice("_Presets/".length)}`;
+  if (folder === "_Base") return "base-pdf";
   return `applications/${folder}`;
 }
 
@@ -39,7 +40,8 @@ export async function showHistory(view: View, gh: GitHub): Promise<void> {
           r.date,
           r.match_pct ? `match ${r.match_pct}%` : null,
           r.cost_usd ? `$${r.cost_usd}` : null,
-          r.source?.startsWith("preset:") ? `preset ${r.source.slice(7)}` : r.provider,
+          r.source === "base" ? "base resume"
+            : r.source?.startsWith("preset:") ? `preset ${r.source.slice(7)}` : r.provider,
         ].filter(Boolean).join(" · ")));
     })));
 }

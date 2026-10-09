@@ -79,7 +79,7 @@ jobs:
           tailor request start --data-dir data --work "$RUNNER_TEMP/rt-work" "${args[@]}"
 
       - name: Set up TinyTeX
-        if: steps.queue.outputs.jobs != '0'
+        if: steps.queue.outputs.jobs != '0' || steps.queue.outputs.base == 'stale'
         uses: ./tool/.github/actions/setup-tinytex
 
       - name: Install Claude Code (fallback provider)
@@ -107,6 +107,12 @@ jobs:
       - name: Compile and check
         if: ${{ !cancelled() && steps.queue.outputs.jobs != '0' }}
         run: tailor request compile --data-dir data --work "$WORK"
+
+      # The untailored base resumes as PDFs (base-pdf/), for the web app. Only after
+      # base/ changed; no LLM call.
+      - name: Build base PDFs
+        if: ${{ !cancelled() && steps.queue.outputs.base == 'stale' }}
+        run: tailor base build --data-dir data
 
       # Always runs, so a failed or timed-out request still gets results/<id>.json and is
       # not picked up (and paid for) again by the next run. With nothing queued it still

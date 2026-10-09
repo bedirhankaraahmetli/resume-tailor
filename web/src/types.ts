@@ -51,6 +51,13 @@ export interface PresetStatus {
   files: Record<string, string>;
 }
 
+export interface BaseStatus {
+  folder: string;
+  status: "up to date" | "outdated" | "never built";
+  built_at: string | null;
+  files: Record<string, string>;
+}
+
 /** A ready-to-use view context: the route's element and whether it is still shown. */
 export interface View {
   el: HTMLElement;

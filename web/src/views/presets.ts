@@ -5,7 +5,7 @@ import { busy, clear, h, money, notice, shortDate } from "../dom";
 import { GitHubError, type GitHub } from "../github";
 import { requestId } from "../ids";
 import { submit } from "../requests";
-import type { PresetRequest, PresetStatus, View } from "../types";
+import type { BaseStatus, PresetRequest, PresetStatus, View } from "../types";
 
 const BADGE: Record<PresetStatus["status"], [string, string]> = {
   "up to date": ["ok", "✓ Up to date"],
@@ -15,7 +15,8 @@ const BADGE: Record<PresetStatus["status"], [string, string]> = {
 
 export async function showPresets(view: View, gh: GitHub): Promise<void> {
   clear(view.el, h("h1", null, "Quick apply"), notice("info", "Loading presets…"));
-  const report = await gh.getJson<{ presets: PresetStatus[] }>("presets/status.json");
+  const report = await gh.getJson<{ base?: BaseStatus; presets: PresetStatus[] }>(
+    "presets/status.json");
   if (!view.alive()) return;
   if (!report) {
     clear(view.el, h("h1", null, "Quick apply"), notice("info", "No preset status yet. "
@@ -37,7 +38,9 @@ export async function showPresets(view: View, gh: GitHub): Promise<void> {
     h("p", { class: "muted" }, "Ready-made resumes per role family. Use one when a posting "
       + "fits a preset well, and log the application here."),
     h("div", { class: "row" }, rebuildAll), out,
-    h("ul", { class: "cards" }, report.presets.map((p) => presetCard(gh, p))));
+    h("ul", { class: "cards" },
+      report.base ? baseCard(gh, report.base) : null,
+      report.presets.map((p) => presetCard(gh, p))));
 }
 
 async function rebuild(gh: GitHub, presets: string[] | "stale", label: string) {
@@ -45,6 +48,30 @@ async function rebuild(gh: GitHub, presets: string[] | "stale", label: string) {
     id: requestId(`preset ${label}`), presets, provider: null, model: null };
   await submit(gh, req, `rebuild ${label}`);
   location.hash = `#/run/${req.id}`;
+}
+
+/** The untailored base resumes. Rebuilt by the workflow whenever base/ changes. */
+function baseCard(gh: GitHub, b: BaseStatus): HTMLElement {
+  const out = h("div");
+  const built = b.status !== "never built";
+  const log = h("button", { class: "secondary", disabled: !built }, "Log this application");
+  log.addEventListener("click", () => clear(out, logForm(gh, {
+    id: "base", label: "base", folder: "_Base", position: "", provider: "", model: "",
+  }, out)));
+  return h("li", { class: "card" },
+    h("div", { class: "card-head" },
+      h("h2", null, "Base resume"),
+      h("span", { class: `badge ${built ? (b.status === "up to date" ? "ok" : "warn") : "muted"}` },
+        b.status === "up to date" ? "✓ Matches base/" : b.status === "outdated"
+          ? "! Rebuilding soon" : "– Not built yet")),
+    h("p", { class: "muted small" }, built
+      ? `Your resumes exactly as written, not tailored · built ${shortDate(b.built_at)}`
+      : "Built by the next workflow run, at no cost."),
+    h("div", { class: "row" },
+      built ? h("a", { class: "button primary", href: `#/folder/${encodeURIComponent(b.folder)}` },
+        "Open") : null,
+      log),
+    out);
 }
 
 function presetCard(gh: GitHub, p: PresetStatus): HTMLElement {
@@ -60,7 +87,10 @@ function presetCard(gh: GitHub, p: PresetStatus): HTMLElement {
   }));
   const log = h("button", { class: "secondary", disabled: p.status === "never built" },
     "Log this application");
-  log.addEventListener("click", () => clear(out, logForm(gh, p, out)));
+  log.addEventListener("click", () => clear(out, logForm(gh, {
+    id: p.id, label: `preset ${p.id}`, folder: `_Presets/${p.folder}`, position: p.position,
+    provider: p.provider ?? "", model: p.model ?? "",
+  }, out)));
 
   return h("li", { class: "card" },
     h("div", { class: "card-head" },
@@ -74,7 +104,16 @@ function presetCard(gh: GitHub, p: PresetStatus): HTMLElement {
     out);
 }
 
-function logForm(gh: GitHub, p: PresetStatus, out: HTMLElement): HTMLElement {
+interface LogTarget {
+  id: string; // used in element ids and the CSV source column
+  label: string; // for the commit message
+  folder: string; // the CSV folder column: where History links to
+  position: string; // pre-filled
+  provider: string;
+  model: string;
+}
+
+function logForm(gh: GitHub, p: LogTarget, out: HTMLElement): HTMLElement {
   const company = h("input", { id: `co-${p.id}`, required: true, autocomplete: "off" });
   const position = h("input", { id: `po-${p.id}`, required: true, autocomplete: "off",
     value: p.position });
@@ -94,11 +133,11 @@ function logForm(gh: GitHub, p: PresetStatus, out: HTMLElement): HTMLElement {
       if (!c || !pos) throw new Error("Enter the company and the position.");
       await appendApplication(gh, {
         date: new Date().toISOString().slice(0, 10), company: c, position: pos,
-        folder: `_Presets/${p.folder}`, provider: p.provider ?? "", model: p.model ?? "",
-        // The preset's cost was already counted when it was built.
-        cost_usd: "0.0000", match_pct: "", status: "applied", source: `preset:${p.id}`,
-        request_id: "",
-      }, `log: ${c} - ${pos} (preset ${p.id})`);
+        folder: p.folder, provider: p.provider, model: p.model,
+        // A preset's cost was already counted when it was built; the base costs nothing.
+        cost_usd: "0.0000", match_pct: "", status: "applied",
+        source: p.id === "base" ? "base" : `preset:${p.id}`, request_id: "",
+      }, `log: ${c} - ${pos} (${p.label})`);
       clear(out, notice("ok", `Logged ${c} – ${pos}. It is in History now.`));
     })();
   });

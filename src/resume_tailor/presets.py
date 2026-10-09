@@ -101,7 +101,9 @@ def status_report(data_dir: Path) -> dict[str, object]:
             "cost_usd": m.cost_usd if m else None,
             "files": m.files if m else {},
         })
-    return {"presets": rows}
+    from .basepdf import report as base_report
+
+    return {"base": base_report(data_dir), "presets": rows}
 
 
 def write_status_report(data_dir: Path) -> None:
