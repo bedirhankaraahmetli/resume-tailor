@@ -187,8 +187,8 @@ credentials:
   free tier is a separate, rate-limited offer, and its data terms differ from paid use.
 
 A typical run costs about **$0.10–0.15** on `claude-sonnet-5-5`, so a `monthly_budget_usd`
-of 5 covers roughly 30–45 applications. A cover letter adds about $0.03–0.05 (one
-language saves about $0.01; the inventory it reads is most of the cost), and a regenerate
+of 5 covers roughly 30–45 applications. A cover letter adds about $0.05, or $0.08 when it needs a
+repair round (one language saves about $0.01; the inventory it reads is most of the cost), and a regenerate
 costs one tailoring call, about $0.05–0.10. Before each run, a budget guard sums this
 month's spend in `usage.csv`. If the run would exceed the budget, it skips the Claude API
 and uses the next provider. When credits run out, the tool says so and falls back the

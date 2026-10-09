@@ -31,7 +31,7 @@ export function letterChoice(select: HTMLSelectElement): LetterChoice | null {
 }
 
 export const LETTER_HINT = "Written from your inventory only, checked like the resume, on "
-  + "your resume's letterhead. Adds about $0.03–0.05; one language saves about $0.01.";
+  + "your resume's letterhead. Adds about $0.05 ($0.08 if it needs a repair); one language saves about $0.01.";
 
 function field(label: string, input: HTMLElement, hint?: string): HTMLElement {
   const id = input.id;

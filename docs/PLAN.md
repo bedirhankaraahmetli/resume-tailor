@@ -202,7 +202,7 @@ From PROMPT.md §12:
   page is dropped with a notice, never shrunk. Files: `<slug>_<Position>_Cover_Letter.pdf`
   and `_On_Yazi.pdf`, `files.cover_en|cover_tr` in the result.
   - **Cost, measured on the real data:** the letter's input is about 9k tokens (the
-    inventory dominates), so a letter is about $0.03–0.05 and one language saves only
+    inventory dominates), so a letter is about $0.03–0.05 (measured on the first live run: $0.052, 13k cached-write tokens, plus $0.025 for a repair) and one language saves only
     about $0.01 of output. Dropping the base digest from the letter block would be the
     next saving if that matters.
   - **First live run (Good Job Games, 2026-10-09): letter skipped.** Paragraph 1 had a
