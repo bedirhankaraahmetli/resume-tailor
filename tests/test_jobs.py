@@ -32,6 +32,7 @@ class Canned:
     def __init__(self, data: Path) -> None:
         self.analysis = (data / "fixtures/analysis.json").read_text("utf-8")
         self.tailoring = (data / "fixtures/tailoring.json").read_text("utf-8")
+        self.letter = (data / "fixtures/letter.json").read_text("utf-8")
         self.calls: list[str] = []
 
     def available(self) -> bool:
@@ -39,7 +40,8 @@ class Canned:
 
     def complete(self, call: LLMCall) -> LLMResponse:
         self.calls.append(call.stage)
-        text = self.analysis if call.stage == "analyze" else self.tailoring
+        text = {"Analysis": self.analysis, "CoverLetter": self.letter}.get(
+            call.schema.__name__, self.tailoring)
         return LLMResponse(text, Usage(1000, 500), "anthropic", "claude-sonnet-5-5", 0.01)
 
 
@@ -119,10 +121,48 @@ def test_stopped_workflow_still_writes_a_failed_result(sample_dir: Path, tmp_pat
     assert res.cost_usd == pytest.approx(0.01)  # the analyze call is still accounted for
 
 
-def test_cover_letter_request_says_it_is_not_built_yet(sample_dir: Path, tmp_path: Path) -> None:
+def test_old_boolean_cover_letter_means_both(sample_dir: Path, tmp_path: Path) -> None:
     _app(sample_dir, cover_letter=True)
     q = start(sample_dir, tmp_path / "work")
-    assert any("Cover letters are not built yet" in n for n in q.jobs[0].notices)
+    assert q.jobs[0].cover_letter == ("en", "tr")
+
+
+@needs_tex
+@pytest.mark.parametrize(("choice", "langs"), [("en", ["en"]), ("both", ["en", "tr"])])
+def test_cover_letter_is_built_for_the_chosen_languages(sample_dir: Path, tmp_path: Path,
+                                                        choice: str, langs: list[str]) -> None:
+    _app(sample_dir, cover_letter=choice)
+    work = tmp_path / "work"
+    start(sample_dir, work)
+    canned = Canned(sample_dir)
+    assert _all_stages(sample_dir, work, canned) == [True, True, True]
+    assert canned.calls == ["analyze", "tailor", "letter"]
+    [res] = finish(sample_dir, work)
+    assert res.status == "done", res.error
+    assert sorted(k for k in res.files if k.startswith("cover_")) == [f"cover_{x}" for x in langs]
+    for x in langs:
+        assert (sample_dir / res.files[f"cover_{x}"]).exists()
+    assert res.cost_usd == pytest.approx(0.03)
+    assert not any("skipped" in n for n in res.notices)
+    assert f"Cover letter written ({', '.join(langs)})." in res.notices
+
+
+def test_a_letter_that_fails_its_guard_never_costs_the_resumes(sample_dir: Path,
+                                                              tmp_path: Path) -> None:
+    _app(sample_dir, cover_letter="en")
+    work = tmp_path / "work"
+    start(sample_dir, work)
+    canned = Canned(sample_dir)
+    # 0.97 is the number the sample inventory rules out.
+    canned.letter = canned.letter.replace("0.84", "0.97")
+    assert run_queue_stage(sample_dir, work, "analyze", providers={"anthropic": canned},
+                           log=lambda _m: None)
+    assert run_queue_stage(sample_dir, work, "tailor", providers={"anthropic": canned},
+                           log=lambda _m: None)
+    assert canned.calls == ["analyze", "tailor", "letter", "repair"]
+    job = load_queue(work).jobs[0]
+    assert job.letter is None and not job.failed
+    assert any(n.startswith("Cover letter skipped") and "0.97" in n for n in job.notices)
 
 
 def test_stale_preset_request_with_nothing_stale_is_done(sample_dir: Path, tmp_path: Path,

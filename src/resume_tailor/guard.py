@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass
 
 from .catalog import Catalog
-from .models import Bullet, Tailoring
+from .models import Bullet, CoverLetter, Tailoring
 from .text import contains_term, extract_numbers, fold
 
 # Technologies an LLM is likely to borrow from a posting. If one appears in a bullet but
@@ -60,36 +60,46 @@ class GuardResult:
 _PASSIVE_TR = re.compile(r"\b\w+(ıldı|ildi|uldu|üldü|ndı|ndi|ndu|ndü|ınmıştır|ilmiştir)[.!]?$")
 
 
-def check(cat: Catalog, t: Tailoring) -> GuardResult:
-    v: list[Violation] = []
-    warn: list[str] = []
-    cfg = cat.config.resume
-    inv_folded = fold(cat.inventory.raw)
-    never_terms = [*cat.inventory.never_claim, *cfg.never_claim_tr]
-    versioned = sorted(
-        {s for e in cat.entries.values() for s in e.allowed_stack if re.search(r"\d", s)}
-        | {s for s in cat.skills if re.search(r"\d", s)},
-        key=len, reverse=True,
-    )
+class _Texts:
+    """The checks every piece of generated prose gets: numbers against the cited sources,
+    the never-claim list and invented technologies. Shared by resumes and cover letters."""
 
-    def known_source(sid: str) -> bool:
-        return sid in cat.entries or sid in cat.general_sources
+    def __init__(self, cat: Catalog, v: list[Violation]) -> None:
+        self.cat, self.v = cat, v
+        self.inv_folded = fold(cat.inventory.raw)
+        self.never_terms = [*cat.inventory.never_claim, *cat.config.resume.never_claim_tr]
+        self.versioned = sorted(
+            {s for e in cat.entries.values() for s in e.allowed_stack if re.search(r"\d", s)}
+            | {s for s in cat.skills if re.search(r"\d", s)},
+            key=len, reverse=True,
+        )
 
-    def source_text(ids: list[str]) -> str:
+    def known_source(self, sid: str) -> bool:
+        return sid in self.cat.entries or sid in self.cat.general_sources
+
+    def source_text(self, ids: list[str]) -> str:
         parts = []
         for sid in ids:
-            if sid in cat.entries:
-                parts.append(cat.entries[sid].source_text)
-            elif sid in cat.general_sources:
-                parts.append(cat.general_sources[sid])
+            if sid in self.cat.entries:
+                parts.append(self.cat.entries[sid].source_text)
+            elif sid in self.cat.general_sources:
+                parts.append(self.cat.general_sources[sid])
         return "\n".join(parts)
 
-    def check_text(where: str, text: str, allowed_numbers: set[str],
+    def forbidden(self, ids: list[str]) -> set[str]:
+        out: set[str] = set()
+        for sid in ids:
+            if sid in self.cat.entries:
+                out |= self.cat.entries[sid].forbidden_numbers
+        return out
+
+    def check_text(self, where: str, text: str, allowed_numbers: set[str],
                    forbidden: set[str]) -> None:
+        v = self.v
         # "Java 21" and "JUnit 5" are names, not quantities: drop known versioned names
         # before counting numbers, so they need not be (and cannot be) cited as counts.
         counted = text
-        for term in versioned:
+        for term in self.versioned:
             counted = re.sub(r"(?<!\w)" + re.escape(term) + r"(?!\w)", " ", counted,
                              flags=re.IGNORECASE)
         numbers = extract_numbers(counted)
@@ -99,14 +109,22 @@ def check(cat: Catalog, t: Tailoring) -> GuardResult:
             v.append(Violation("forbidden-number", where,
                                f"'{n}' is explicitly ruled out by the inventory"))
         ft = fold(text)
-        for term in never_terms:
+        for term in self.never_terms:
             if contains_term(ft, term):
                 v.append(Violation("never-claim", where, f"mentions '{term}', which the "
                                    "inventory says never to claim"))
         for term in TECH_TERMS:
-            if contains_term(ft, term) and not contains_term(inv_folded, term):
+            if contains_term(ft, term) and not contains_term(self.inv_folded, term):
                 v.append(Violation("unknown-tech", where,
                                    f"mentions '{term}', which is not in the inventory"))
+
+
+def check(cat: Catalog, t: Tailoring) -> GuardResult:
+    v: list[Violation] = []
+    warn: list[str] = []
+    cfg = cat.config.resume
+    texts = _Texts(cat, v)
+    known_source, source_text, check_text = texts.known_source, texts.source_text, texts.check_text
 
     def check_bullet(where: str, parent: str, b: Bullet) -> None:
         if not b.sources:
@@ -116,10 +134,7 @@ def check(cat: Catalog, t: Tailoring) -> GuardResult:
                 v.append(Violation("sources", where, f"unknown source id '{sid}'"))
         ids = [*b.sources, parent]
         allowed = extract_numbers(source_text(ids))
-        forbidden: set[str] = set()
-        for sid in ids:
-            if sid in cat.entries:
-                forbidden |= cat.entries[sid].forbidden_numbers
+        forbidden = texts.forbidden(ids)
         if not b.en.strip() or not b.tr.strip():
             v.append(Violation("empty", where, "bullet needs both 'en' and 'tr' text"))
         check_text(where + " (en)", b.en, allowed, forbidden)
@@ -220,3 +235,43 @@ def check(cat: Catalog, t: Tailoring) -> GuardResult:
         v.append(Violation("duplicate", "skills", "a skill group is listed twice"))
 
     return GuardResult(v, warn)
+
+
+# Plain words only: the letter's links and contact details come from the base heading.
+_CONTACT = re.compile(r"https?://|www\.|\S+@\S+\.\w+")
+LETTER_MAX_WORDS = 400
+
+
+def check_letter(cat: Catalog, letter: CoverLetter, langs: tuple[str, ...]) -> GuardResult:
+    """The fact guard for a cover letter: every paragraph cites its sources, and its
+    numbers, terms and technologies pass the same checks as a resume bullet."""
+    v: list[Violation] = []
+    texts = _Texts(cat, v)
+    if not 2 <= len(letter.paragraphs) <= 5:
+        v.append(Violation("letter", "paragraphs", "write 3 or 4 body paragraphs"))
+    words = dict.fromkeys(langs, 0)
+    for i, p in enumerate(letter.paragraphs, 1):
+        where = f"letter paragraph {i}"
+        for sid in p.sources:
+            if not texts.known_source(sid):
+                v.append(Violation("sources", where, f"unknown source id '{sid}'"))
+            elif sid in cat.entries and not cat.entries[sid].inv.usable:
+                v.append(Violation("status", where, f"'{sid}' may not be used "
+                                   f"(status '{cat.entries[sid].inv.status}')"))
+        allowed = extract_numbers(texts.source_text(p.sources))
+        forbidden = texts.forbidden(p.sources)
+        for lang in langs:
+            text = p.en if lang == "en" else p.tr
+            if not text or not text.strip():
+                v.append(Violation("empty", where, f"needs '{lang}' text"))
+                continue
+            words[lang] += len(text.split())
+            texts.check_text(f"{where} ({lang})", text, allowed, forbidden)
+            if _CONTACT.search(text):
+                v.append(Violation("contact", f"{where} ({lang})", "no links, emails or "
+                                   "contact details; the letterhead has them"))
+    for lang, n in words.items():
+        if n > LETTER_MAX_WORDS:
+            v.append(Violation("length", f"letter ({lang})", f"{n} words; keep it under "
+                               f"{LETTER_MAX_WORDS} so it fits one page"))
+    return GuardResult(v, [])

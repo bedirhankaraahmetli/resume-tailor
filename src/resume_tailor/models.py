@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # =======================================================================================
 # LLM output: posting analysis (call 1)
@@ -105,6 +105,30 @@ class Tailoring(_Strict):
     gaps: list[str] = Field(description="Posting requirements with no evidence in the inventory.")
 
 
+class LetterParagraph(_Strict):
+    sources: list[str] = Field(
+        description="Inventory section ids this paragraph's facts come from, e.g. ['4.1']."
+    )
+    en: str | None = Field(description="English text, plain, no LaTeX. Null if English "
+                           "was not requested.")
+    tr: str | None = Field(description="Turkish text, plain, no LaTeX, first person. Null "
+                           "if Turkish was not requested.")
+
+
+class CoverLetter(_Strict):
+    """The body of a cover letter. Greeting, date, heading and sign-off are added in code,
+    so the model never writes a name, an address or contact details."""
+
+    paragraphs: list[LetterParagraph] = Field(description="3 or 4 body paragraphs, in order.")
+
+
+LetterLangs = Literal["en", "tr", "both"]
+
+
+def letter_languages(choice: LetterLangs | None) -> tuple[str, ...]:
+    return () if choice is None else ("en", "tr") if choice == "both" else (choice,)
+
+
 # =======================================================================================
 # Request / result files (web app ↔ workflow)
 # =======================================================================================
@@ -125,9 +149,17 @@ class ApplicationRequest(BaseModel):
     provider: str | None = None
     model: str | None = None
     note: str | None = None
-    cover_letter: bool = False
+    # Which cover letters to write. Older request files carry a bool: true meant both.
+    cover_letter: LetterLangs | None = None
     # The id of an earlier application whose folder this run rebuilds (with a new note).
     regenerates: str | None = None
+
+    @field_validator("cover_letter", mode="before")
+    @classmethod
+    def _bool_letter(cls, v: object) -> object:
+        if v is True:
+            return "both"
+        return None if v is False else v
 
     @model_validator(mode="after")
     def _posting_or_regenerates(self) -> ApplicationRequest:

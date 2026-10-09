@@ -29,6 +29,7 @@ from .keys import (
 )
 from .keys import status as keys_status
 from .ledger import now_utc
+from .models import letter_languages
 from .naming import default_out_dir
 from .pipeline import RunFailed, RunRequest, load_previous, run
 from .presets import changed_inputs, read_manifest, status
@@ -81,6 +82,7 @@ def cmd_run(a: argparse.Namespace) -> int:
         kind="application", request_id=request_id(a.company), posting=posting,
         company=a.company, position=a.position, provider=a.provider, model=a.model,
         note=a.note, dry_run=a.dry_run, fixture_dir=Path(a.fixtures) if a.fixtures else None,
+        cover_letter=letter_languages(a.cover_letter),
     )
     res = run(data, req, out_dir=_out(a.out))
     _print_result(res)
@@ -100,6 +102,7 @@ def _regenerate(data: Path, a: argparse.Namespace) -> int:
     req = RunRequest(
         kind="application", request_id=request_id(prev.analysis.company),
         posting=prev.posting, provider=a.provider, model=a.model, note=a.note, previous=prev,
+        cover_letter=letter_languages(a.cover_letter),
     )
     res = run(data, req, out_dir=_out(a.out))
     _print_result(res)
@@ -359,6 +362,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--provider", choices=["anthropic", "claude-code", "gemini"])
     r.add_argument("--model", help="override the tailoring model id")
     r.add_argument("--note", help='e.g. "emphasize iOS"')
+    r.add_argument("--cover-letter", choices=["en", "tr", "both"],
+                   help="also write a cover letter (one extra LLM call)")
     r.add_argument("--regenerate", metavar="REQUEST_ID",
                    help="rebuild an earlier application in place, with a new --note")
     r.add_argument("--out", help="output root (default: Desktop/Job Applications; 'none' to skip)")

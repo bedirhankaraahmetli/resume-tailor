@@ -15,7 +15,7 @@ from .catalog import Catalog
 from .config import Config, Preset
 from .inventory import strip_contact_section
 from .latex import to_text
-from .models import Analysis, Tailoring
+from .models import Analysis, CoverLetter, Tailoring
 from .providers.base import LLMCall
 from .redaction import assert_clean, redact
 
@@ -99,6 +99,44 @@ def static_block(cat: Catalog) -> str:
         "# BASE RESUME (current wording, EN and TR)\n\n"
         + redact(base_digest(cat), names, contacts),
     ])
+
+
+def letter_static_block(cat: Catalog) -> str:
+    """Same facts as the tailoring block, under the letter's own rules. Its own cache
+    prefix: the output schema differs, so it could not share the tailoring call's."""
+    names, contacts = cat.config.owner.names, cat.config.owner.contact_strings
+    inventory = redact(strip_contact_section(cat.inventory.raw), names, contacts)
+    return "\n\n".join([
+        load_prompt("letter"),
+        "# CATALOG (ids and allowed values)\n\n```json\n" + catalog_json(cat) + "\n```",
+        "# CAREER INVENTORY\n\n" + inventory,
+        "# BASE RESUME (current wording, EN and TR)\n\n"
+        + redact(base_digest(cat), names, contacts),
+    ])
+
+
+_LANG_LINE = {
+    ("en",): "English only. Set every `tr` to null.",
+    ("tr",): "Turkish only. Set every `en` to null.",
+    ("en", "tr"): "English and Turkish: fill both `en` and `tr` in every paragraph.",
+}
+
+
+def letter_call(cat: Catalog, *, analysis: Analysis, posting: str, tailoring: Tailoring,
+                note: str | None, langs: tuple[str, ...],
+                model: str | None = None) -> LLMCall:
+    names, contacts = cat.config.owner.names, cat.config.owner.contact_strings
+    selection = [f"- {e.id}: {cat.entries[e.id].inv.title}" for e in tailoring.experience
+                 if e.id in cat.entries]
+    selection += [f"- {p.id}: {cat.entries[p.id].inv.title}" for p in tailoring.projects
+                  if p.id in cat.entries]
+    user = _fill(load_prompt("letter_request"), languages=_LANG_LINE[langs],
+                 analysis=analysis.model_dump_json(indent=1),
+                 posting=redact(posting, names, contacts),
+                 selection="\n".join(selection) or "(none)",
+                 note=redact(note, names, contacts) if note else "(none)")
+    return _checked(LLMCall("letter", "tailor", letter_static_block(cat),
+                            redact(user, names, contacts), CoverLetter, model), cat.config)
 
 
 def _checked(call: LLMCall, config: Config) -> LLMCall:

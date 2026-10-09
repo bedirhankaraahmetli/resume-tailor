@@ -13,11 +13,13 @@ import {
 } from "../save";
 import { submit } from "../requests";
 import type { ApplicationRequest, RunResult, View } from "../types";
-import { PROVIDERS } from "./new";
+import { LETTER_HINT, PROVIDERS, letterChoice, letterSelect } from "./new";
 
 interface Located {
   en?: string;
   tr?: string;
+  coverEn?: string;
+  coverTr?: string;
   report?: string;
 }
 
@@ -28,6 +30,8 @@ async function locate(gh: GitHub, folder: string): Promise<Located | null> {
   return {
     en: files.find((p) => p.endsWith("_Resume.pdf")),
     tr: files.find((p) => p.endsWith("_Ozgecmis.pdf")),
+    coverEn: files.find((p) => p.endsWith("_Cover_Letter.pdf")),
+    coverTr: files.find((p) => p.endsWith("_On_Yazi.pdf")),
     report: files.find((p) => p.endsWith("match-report.md")),
   };
 }
@@ -71,9 +75,11 @@ export async function showFolder(view: View, gh: GitHub, folder: string,
     clear(status, notice("error", `No PDFs found in ${folder}.`));
     return;
   }
-  const [en, tr, report] = await Promise.all([
+  const [en, tr, coverEn, coverTr, report] = await Promise.all([
     found.en ? gh.getBytes(found.en) : null,
     found.tr ? gh.getBytes(found.tr) : null,
+    found.coverEn ? gh.getBytes(found.coverEn) : null,
+    found.coverTr ? gh.getBytes(found.coverTr) : null,
     found.report ? gh.getText(found.report) : null,
   ]);
   if (!view.alive()) return;
@@ -81,7 +87,8 @@ export async function showFolder(view: View, gh: GitHub, folder: string,
 
   const files: OutFile[] = [];
   const pdfs: [string, string | undefined, Uint8Array | null][] = [
-    ["English", found.en, en], ["Türkçe", found.tr, tr]];
+    ["English", found.en, en], ["Türkçe", found.tr, tr],
+    ["Cover letter", found.coverEn, coverEn], ["Ön yazı", found.coverTr, coverTr]];
   for (const [, path, data] of pdfs) {
     if (path && data) files.push({ name: basename(path), data, type: "application/pdf" });
   }
@@ -178,6 +185,7 @@ function regenerateCard(gh: GitHub, folder: string, result?: RunResult): HTMLEle
     placeholder: "e.g. lead with the iOS projects; drop the game projects" });
   const provider = h("select", { id: "regen-provider" },
     PROVIDERS.map(([v, l]) => h("option", { value: v }, l)));
+  const cover = letterSelect("regen-cover");
   const out = h("div");
   const go = h("button", { class: "primary", type: "submit" }, "Regenerate");
   let previous: string | null = null;
@@ -187,6 +195,9 @@ function regenerateCard(gh: GitHub, folder: string, result?: RunResult): HTMLEle
       + "tailoring call (about $0.05–0.10), because the posting analysis is reused. The "
       + "new PDFs replace these files, and History keeps one row with its status."),
     h("div", { class: "field" }, h("label", { for: note.id }, "Note for the tailoring"), note),
+    h("div", { class: "field" }, h("label", { for: cover.id }, "Cover letter"), cover,
+      h("p", { class: "hint" }, `${LETTER_HINT} A letter from the earlier run is replaced `
+        + "too, so pick it again to keep one.")),
     h("div", { class: "field" }, h("label", { for: provider.id }, "Provider"), provider),
     go, out);
   const card = h("details", { class: "card" },
@@ -205,6 +216,9 @@ function regenerateCard(gh: GitHub, folder: string, result?: RunResult): HTMLEle
       }
       const req = await gh.getJson<Partial<ApplicationRequest>>(`requests/${id}.json`);
       if (!note.value && req?.note) note.value = req.note;
+      // Old request files carry a boolean: true meant both languages.
+      const was = req?.cover_letter as unknown;
+      cover.value = was === true ? "both" : typeof was === "string" ? was : "";
     }).catch((e: unknown) => clear(out, notice("error", errorText(e))));
   });
 
@@ -219,7 +233,7 @@ function regenerateCard(gh: GitHub, folder: string, result?: RunResult): HTMLEle
       const req: ApplicationRequest = {
         schema_version: 1, type: "application", id: requestId(label), posting: null,
         company: null, position: null, provider: provider.value || null, model: null,
-        note: text, cover_letter: false, regenerates: id,
+        note: text, cover_letter: letterChoice(cover), regenerates: id,
       };
       await submit(gh, req, `regenerate ${label}`);
       location.hash = `#/run/${req.id}`;

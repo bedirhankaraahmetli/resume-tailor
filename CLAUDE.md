@@ -26,7 +26,9 @@ There are two repos:
 - **The owner's real data** is the sibling folder `../resume-data`, which becomes the
   private repo. Never copy anything from it into this repo.
 - **The pipeline** is `pipeline.py`: analyze → tailor → `guard.check` → `render` →
-  `fit` (pdfLaTeX) → `checks` → outputs.
+  `fit` (pdfLaTeX) → `checks` → outputs. An optional cover letter is written after the
+  resume passes its guard (`guard.check_letter`, `letter.py`); a letter that fails is
+  skipped with a notice and never costs the resumes.
 - **`catalog.py`** joins the inventory, both bases and the config by id. The renderer and
   the guard read only the catalog.
 - **GitHub Actions** runs `.github/workflows/tailor.yml` (reusable), called from the data

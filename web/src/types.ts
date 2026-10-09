@@ -16,6 +16,8 @@ export interface RunResult {
   runs?: RunResult[];
 }
 
+export type LetterChoice = "en" | "tr" | "both";
+
 export interface ApplicationRequest {
   schema_version: 1;
   type: "application";
@@ -27,7 +29,8 @@ export interface ApplicationRequest {
   provider: string | null;
   model: string | null;
   note: string | null;
-  cover_letter: boolean;
+  /** Which cover letters to write; null for none. */
+  cover_letter: LetterChoice | null;
   /** The request id of the application this run rebuilds in place. */
   regenerates: string | null;
 }

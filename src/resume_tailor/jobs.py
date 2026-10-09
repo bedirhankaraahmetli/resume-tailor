@@ -27,7 +27,15 @@ from pydantic import BaseModel, Field, ValidationError
 from .config import load_config, load_presets
 from .ledger import Ledger
 from .llm_input import repair_prompt
-from .models import Analysis, ApplicationRequest, PresetRequest, RunResult, Tailoring
+from .models import (
+    Analysis,
+    ApplicationRequest,
+    CoverLetter,
+    PresetRequest,
+    RunResult,
+    Tailoring,
+    letter_languages,
+)
 from .pipeline import (
     STAGES,
     Previous,
@@ -71,6 +79,7 @@ class Job(BaseModel):
     regenerates: str | None = None
     previous_folder: str | None = None
     previous_analysis: Analysis | None = None
+    cover_letter: tuple[str, ...] = ()
     stage_done: str | None = None
     failed: bool = False
     result: RunResult
@@ -79,6 +88,7 @@ class Job(BaseModel):
     tailoring: Tailoring | None = None
     raw_tailoring: str | None = None
     repaired: list[str] = Field(default_factory=list)
+    letter: CoverLetter | None = None
     responses: list[dict[str, object]] = Field(default_factory=list)
     notices: list[str] = Field(default_factory=list)
 
@@ -161,10 +171,8 @@ def jobs_for(data_dir: Path, path: Path) -> list[Job]:
                         f"{', '.join(PROVIDERS)})")]
 
     if kind == "application":
-        notices = []
-        if areq.cover_letter:
-            notices.append("Cover letters are not built yet (Phase 4); only the resumes "
-                           "were made.")
+        notices: list[str] = []
+        letter = letter_languages(areq.cover_letter)
         if areq.regenerates is not None:
             # Checked now, so a bad id fails before anything is spent.
             if not ID_RE.match(areq.regenerates):
@@ -177,12 +185,13 @@ def jobs_for(data_dir: Path, path: Path) -> list[Job]:
             return [Job(request_id=rid, run_id=rid, request_path=rel, posting=prev.posting,
                         provider=areq.provider, model=areq.model, note=areq.note,
                         regenerates=areq.regenerates, previous_folder=prev.folder,
-                        previous_analysis=prev.analysis, notices=notices,
+                        previous_analysis=prev.analysis, cover_letter=letter,
+                        notices=notices,
                         result=RunResult(id=rid, status="failed", kind="application"))]
         assert areq.posting is not None  # the model requires it without `regenerates`
         return [Job(request_id=rid, run_id=rid, request_path=rel, posting=areq.posting.text,
                     company=areq.company, position=areq.position, provider=areq.provider,
-                    model=areq.model, note=areq.note, notices=notices,
+                    model=areq.model, note=areq.note, cover_letter=letter, notices=notices,
                     result=RunResult(id=rid, status="failed", kind="application"))]
 
     presets = load_presets(data_dir).presets
@@ -245,7 +254,7 @@ def _request(data_dir: Path, job: Job) -> RunRequest:
     return RunRequest(kind="preset" if preset else "application", request_id=job.run_id,
                       posting=job.posting, company=job.company, position=job.position,
                       provider=job.provider, model=job.model, note=job.note, preset=preset,
-                      previous=_previous(job))
+                      previous=_previous(job), cover_letter=job.cover_letter)
 
 
 def _previous(job: Job) -> Previous | None:
@@ -280,7 +289,8 @@ def run_queue_stage(data_dir: Path, work: Path, stage: Stage, *,
                         notices=list(job.notices),
                         responses=[_response_from_dict(r) for r in job.responses])
         state = RunState(analysis=job.analysis, tailoring=job.tailoring,
-                         raw_tailoring=job.raw_tailoring, repaired=list(job.repaired))
+                         raw_tailoring=job.raw_tailoring, repaired=list(job.repaired),
+                         letter=job.letter)
         result = job.result
         try:
             run_stage(stage, data_dir, config, req, router, state, result, None,
@@ -298,6 +308,7 @@ def run_queue_stage(data_dir: Path, work: Path, stage: Stage, *,
         job.responses = [_response_to_dict(r) for r in router.responses]
         job.analysis, job.tailoring = state.analysis, state.tailoring
         job.raw_tailoring, job.repaired = state.raw_tailoring, state.repaired
+        job.letter = state.letter
         save_queue(work, q)  # after every job, so a crash keeps what is done
     return ok
 

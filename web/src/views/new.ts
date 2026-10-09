@@ -5,7 +5,7 @@ import type { GitHub } from "../github";
 import { requestId } from "../ids";
 import { pdfText } from "../pdf";
 import { submit } from "../requests";
-import type { ApplicationRequest, View } from "../types";
+import type { ApplicationRequest, LetterChoice, View } from "../types";
 
 export const PROVIDERS: [string, string][] = [
   ["", "Default order (Claude API first)"],
@@ -13,6 +13,25 @@ export const PROVIDERS: [string, string][] = [
   ["claude-code", "Claude Code (Pro subscription)"],
   ["gemini", "Gemini (free tier)"],
 ];
+
+const LETTERS: [string, string][] = [
+  ["", "No cover letter"],
+  ["en", "English"],
+  ["tr", "Türkçe"],
+  ["both", "Both (English + Türkçe)"],
+];
+
+/** The cover letter choice; no letter is the default. */
+export function letterSelect(id: string): HTMLSelectElement {
+  return h("select", { id }, LETTERS.map(([v, l]) => h("option", { value: v }, l)));
+}
+
+export function letterChoice(select: HTMLSelectElement): LetterChoice | null {
+  return (select.value || null) as LetterChoice | null;
+}
+
+export const LETTER_HINT = "Written from your inventory only, checked like the resume, on "
+  + "your resume's letterhead. Adds about $0.03–0.05; one language saves about $0.01.";
 
 function field(label: string, input: HTMLElement, hint?: string): HTMLElement {
   const id = input.id;
@@ -30,7 +49,7 @@ export function showNew(view: View, gh: GitHub): void {
   const provider = h("select", { id: "provider" },
     PROVIDERS.map(([v, l]) => h("option", { value: v }, l)));
   const note = h("input", { id: "note", autocomplete: "off", placeholder: "e.g. emphasize iOS" });
-  const cover = h("input", { id: "cover", type: "checkbox", disabled: true });
+  const cover = letterSelect("cover");
   const fileOut = h("div");
   const out = h("div");
 
@@ -56,14 +75,13 @@ export function showNew(view: View, gh: GitHub): void {
     field("…or load it from a file", file, "A .txt or .pdf file. The text is extracted here, "
       + "in your browser."),
     fileOut,
+    field("Cover letter", cover, LETTER_HINT),
     h("details", { class: "card" }, h("summary", null, "Options"),
       field("Company (optional)", company, "Leave empty to take it from the posting."),
       field("Position (optional)", position, "Leave empty to use the title in the posting, "
         + "word for word."),
       field("Provider", provider),
-      field("Note for the tailoring (optional)", note),
-      h("div", { class: "field check" }, cover,
-        h("label", { for: "cover" }, "Cover letter (coming in a later version)"))),
+      field("Note for the tailoring (optional)", note)),
     h("p", { class: "hint" }, "A run takes about a minute and costs roughly $0.05–0.10 on "
       + "the Claude API. The exact cost is shown with the result."),
     go, out);
@@ -80,7 +98,7 @@ export function showNew(view: View, gh: GitHub): void {
         company: company.value.trim() || null,
         position: position.value.trim() || null,
         provider: provider.value || null, model: null,
-        note: note.value.trim() || null, cover_letter: false, regenerates: null,
+        note: note.value.trim() || null, cover_letter: letterChoice(cover), regenerates: null,
       };
       await submit(gh, req, label ?? "new application");
       location.hash = `#/run/${req.id}`;

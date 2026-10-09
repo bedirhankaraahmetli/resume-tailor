@@ -187,7 +187,24 @@ changes:
 
 From PROMPT.md §12:
 - an optional cover letter. **The owner (2026-10-09): choose English, Turkish or both**
-  when ticking it, so a one-language letter costs one language's output tokens;
+  when ticking it, so a one-language letter costs one language's output tokens.
+  **Built (2026-10-09):** `cover_letter: "en" | "tr" | "both" | null` (an old `true`
+  reads as both). One extra call (`letter` stage, tailoring model) after the resume
+  passes its guard, with its own static block (`letter.v1.md` + catalog + inventory +
+  base digest): the output schema differs, so it cannot share the tailoring call's
+  cache. `guard.check_letter` reuses the resume's text checks (numbers in the cited
+  sources, ruled-out numbers, never-claim, invented technologies) and adds: usable
+  projects only, no links or contact details, at most 400 words per language. One
+  repair round; after that the letter is **skipped with a notice and the resumes are
+  still delivered**. `letter.py` builds `letter.tex` from the base `resume.tex`'s own
+  preamble and `src/heading.tex` (same fonts, margins and letterhead, nothing in the
+  base modified); greeting, date, subject line and sign-off are code. A letter over one
+  page is dropped with a notice, never shrunk. Files: `<slug>_<Position>_Cover_Letter.pdf`
+  and `_On_Yazi.pdf`, `files.cover_en|cover_tr` in the result.
+  - **Cost, measured on the real data:** the letter's input is about 9k tokens (the
+    inventory dominates), so a letter is about $0.03–0.05 and one language saves only
+    about $0.01 of output. Dropping the base digest from the letter block would be the
+    next saving if that matters.
 - status editing in History. **Built (2026-10-09):** a picker on each card (applied /
   interview / offer / rejected; an unknown existing value is kept as an option).
   `csv.setField` rewrites only that record's bytes, finds the row by its full content

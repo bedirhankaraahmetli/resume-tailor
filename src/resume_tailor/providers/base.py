@@ -35,7 +35,7 @@ class Usage:
 
 @dataclass
 class LLMCall:
-    stage: Literal["analyze", "tailor", "repair"]
+    stage: Literal["analyze", "tailor", "repair", "letter"]
     role: Literal["analyze", "tailor"]  # which configured model to use
     system: str  # static, cacheable
     user: str  # per-run

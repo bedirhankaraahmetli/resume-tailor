@@ -75,17 +75,17 @@ def prepare(base_dir: Path, rendered: dict[str, str], build_dir: Path) -> None:
         (build_dir / rel).write_text(content, encoding="utf-8", newline="\n")
 
 
-def compile_pdf(build_dir: Path, pdflatex: str | None = None) -> Path:
+def compile_pdf(build_dir: Path, pdflatex: str | None = None, main: str = "resume") -> Path:
     exe = pdflatex or find_pdflatex()
     if exe is None:
         raise CompileError("pdflatex not found. Install TinyTeX (see README) or add it to PATH.")
     # One pass is enough: the resume has no references, TOC or page-number fields.
     proc = subprocess.run(
-        [exe, "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", "resume.tex"],
+        [exe, "-interaction=nonstopmode", "-halt-on-error", "-file-line-error", f"{main}.tex"],
         cwd=build_dir, capture_output=True, text=True, encoding="utf-8", errors="replace",
         timeout=180,
     )
-    pdf = build_dir / "resume.pdf"
+    pdf = build_dir / f"{main}.pdf"
     if proc.returncode != 0 or not pdf.exists():
         # Error lines only: the full log echoes resume content, which CI must not print.
         errors = [ln for ln in proc.stdout.splitlines() if ln.startswith("!") or ":error" in ln

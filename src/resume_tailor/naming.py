@@ -47,6 +47,14 @@ def pdf_names(owner_slug: str, position: str) -> dict[str, str]:
     }
 
 
+def letter_names(owner_slug: str, position: str) -> dict[str, str]:
+    slug = slug_ascii(position) or "Position"
+    return {
+        "en": f"{owner_slug}_{slug}_Cover_Letter.pdf",
+        "tr": f"{owner_slug}_{slug}_On_Yazi.pdf",
+    }
+
+
 def desktop_dir() -> Path:
     """The real Desktop, including OneDrive-redirected ones on Windows."""
     if sys.platform == "win32":

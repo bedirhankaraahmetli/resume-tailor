@@ -21,11 +21,12 @@ from .catalog import Catalog, build_catalog
 from .checks import ats_check, keyword_report
 from .config import Config, Preset, load_config
 from .fit import fit
-from .guard import check
+from .guard import check, check_letter
 from .ledger import Ledger, append_application, now_utc, update_application
-from .llm_input import PROMPT_VERSION, analyze_call, repair_prompt, tailor_call
-from .models import Analysis, RunResult, Tailoring
-from .naming import folder_name, pdf_names, unique_folder
+from .letter import prepare_letter, render_letter
+from .llm_input import PROMPT_VERSION, analyze_call, letter_call, repair_prompt, tailor_call
+from .models import Analysis, CoverLetter, RunResult, Tailoring
+from .naming import folder_name, letter_names, pdf_names, unique_folder
 from .providers.anthropic_provider import AnthropicProvider
 from .providers.base import LLMCall, Provider, ProviderError
 from .providers.claude_code import ClaudeCodeProvider
@@ -93,6 +94,8 @@ class RunRequest:
     note: str | None = None
     preset: Preset | None = None
     previous: Previous | None = None
+    # Cover letter languages, () for none: ("en",), ("tr",) or ("en", "tr").
+    cover_letter: tuple[str, ...] = ()
     dry_run: bool = False
     fixture_dir: Path | None = None
 
@@ -134,6 +137,7 @@ class RunState:
     tailoring: Tailoring | None = None
     raw_tailoring: str | None = None
     repaired: list[str] = field(default_factory=list)
+    letter: CoverLetter | None = None
 
 
 def run(data_dir: Path, req: RunRequest, *, out_dir: Path | None,
@@ -244,6 +248,48 @@ def _tailor(data_dir: Path, config: Config, req: RunRequest, router: Router, sta
         raise RunFailed("fact guard failed after one repair round:\n"
                         + "\n".join(f"  - {v}" for v in g.violations))
     state.tailoring = tailoring
+    if req.cover_letter and req.kind == "application":
+        _letter(data_dir, cat, req, router, state, log)
+
+
+def _letter(data_dir: Path, cat: Catalog, req: RunRequest, router: Router, state: RunState,
+            log: Callable[[str], None]) -> None:
+    """The cover letter body, through its own fact guard with one repair round.
+
+    Optional by nature: any failure is a notice and the resumes are still delivered.
+    """
+    assert state.analysis is not None and state.tailoring is not None
+    langs = req.cover_letter
+    log(f"writing the cover letter ({', '.join(langs)})…")
+    try:
+        if req.dry_run:
+            d = req.fixture_dir or data_dir / "fixtures"
+            letter = CoverLetter.model_validate_json(
+                (d / "letter.json").read_text(encoding="utf-8"))
+            g = check_letter(cat, letter, langs)
+        else:
+            assert req.posting is not None
+            call = letter_call(cat, analysis=state.analysis, posting=req.posting,
+                               tailoring=state.tailoring, note=req.note, langs=langs,
+                               model=req.model)
+            letter, resp, provider = router.run(call, CoverLetter.model_validate_json)
+            g = check_letter(cat, letter, langs)
+            if not g.ok:
+                log(f"letter guard: {len(g.violations)} problem(s); asking for one repair…")
+                repair = LLMCall("repair", "tailor", call.system,
+                                 repair_prompt(call.user, resp.text,
+                                               [str(v) for v in g.violations]),
+                                 CoverLetter, call.model_override)
+                letter, _ = router.call_on(provider, repair, CoverLetter.model_validate_json)
+                g = check_letter(cat, letter, langs)
+    except Exception as e:  # never lose the resumes over the optional letter
+        router.notices.append(f"Cover letter skipped: {describe(e)}")
+        return
+    if not g.ok:
+        router.notices.append("Cover letter skipped: the fact guard still failed after one "
+                              "repair round: " + "; ".join(str(v) for v in g.violations))
+        return
+    state.letter = letter
 
 
 def _compile(data_dir: Path, config: Config, req: RunRequest, router: Router,
@@ -297,19 +343,54 @@ def _compile(data_dir: Path, config: Config, req: RunRequest, router: Router,
             warnings += ats.warnings
         warnings += cat.warnings
 
+        letters = _compile_letters(data_dir, config, req, analysis, state.letter, router,
+                                   work, log)
         _write_outputs(data_dir, config, cat, req, analysis, tailoring, final, fitted.log,
                        info, keywords, warnings, router, result, out_dir, work,
-                       state.raw_tailoring)
+                       state.raw_tailoring, letters)
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def _compile_letters(data_dir: Path, config: Config, req: RunRequest, analysis: Analysis,
+                     letter: CoverLetter | None, router: Router, work: Path,
+                     log: Callable[[str], None]) -> dict[str, Path]:
+    """One PDF per requested language. A letter that does not fit one page is dropped
+    with a notice: fonts and margins are never shrunk to make it fit (T2)."""
+    if letter is None:
+        return {}
+    log("compiling the cover letter…")
+    out: dict[str, Path] = {}
+    for lang in req.cover_letter:
+        base = data_dir / "base" / lang
+        try:
+            tex = render_letter((base / "resume.tex").read_text(encoding="utf-8"), letter,
+                                lang, company=analysis.company, position=analysis.position,
+                                signer=config.owner.names[0], today=now_utc().date())
+            d = work / f"letter-{lang}"
+            prepare_letter(base, tex, d)
+            pdf = compile_pdf(d, main="letter")
+            pages = measure(pdf).pages
+        except Exception as e:  # the letter is optional; the resumes are not
+            router.notices.append(f"Cover letter ({lang}) skipped: {describe(e)}")
+            continue
+        if pages != 1:
+            router.notices.append(f"Cover letter ({lang}) skipped: it ran to {pages} pages. "
+                                  "Regenerate with a note asking for a shorter letter.")
+            continue
+        out[lang] = pdf
+    return out
 
 
 def _write_outputs(data_dir: Path, config: Config, cat: Catalog, req: RunRequest,
                    analysis: Analysis, proposed: Tailoring, final: Tailoring,
                    fit_log: list[str], info: dict[str, PdfInfo], keywords: object,
                    warnings: list[str], router: Router, result: RunResult,
-                   out_dir: Path | None, work: Path, raw: str | None) -> None:
+                   out_dir: Path | None, work: Path, raw: str | None,
+                   letters: dict[str, Path] | None = None) -> None:
     from .checks import KeywordReport
+
+    letters = letters or {}
 
     position = analysis.position
     names = pdf_names(config.owner.slug, position)
@@ -340,6 +421,9 @@ def _write_outputs(data_dir: Path, config: Config, cat: Catalog, req: RunRequest
         for f in (work / lang / "src").glob("*.tex"):
             shutil.copyfile(f, build / lang / "src" / f.name)
         shutil.copyfile(work / lang / "resume.pdf", dest / names[lang])
+    lnames = letter_names(config.owner.slug, position)
+    for lang, pdf in letters.items():
+        shutil.copyfile(pdf, dest / lnames[lang])
     if req.posting:
         (build / "posting.txt").write_text(req.posting, encoding="utf-8")
     (build / "llm-response.json").write_text(json.dumps({
@@ -361,15 +445,19 @@ def _write_outputs(data_dir: Path, config: Config, cat: Catalog, req: RunRequest
 
     if copy_to is not None:
         copy_to.mkdir(parents=True, exist_ok=True)
-        for fname in (names["en"], names["tr"], "match-report.md"):
+        for fname in (names["en"], names["tr"], "match-report.md",
+                      *(lnames[lang] for lang in letters)):
             shutil.copyfile(dest / fname, copy_to / fname)
 
     rel = dest.relative_to(data_dir).as_posix()
     result.folder = rel
     result.files = {"en": f"{rel}/{names['en']}", "tr": f"{rel}/{names['tr']}",
-                    "report": f"{rel}/match-report.md"}
+                    "report": f"{rel}/match-report.md",
+                    **{f"cover_{lang}": f"{rel}/{lnames[lang]}" for lang in letters}}
     result.match_pct = kr.match_pct if kr else None
     result.notices = list(warnings)
+    if letters:
+        result.notices.append(f"Cover letter written ({', '.join(letters)}).")
     if router.responses:
         last = router.responses[-1]
         provider, model = last.provider, last.model
