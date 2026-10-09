@@ -212,6 +212,13 @@ From PROMPT.md §12:
     in place because letter.v1 had never produced a letter), in the repair message (an
     unsupported number is deleted, not re-sourced), and `_build/llm-response.json` now
     keeps `letter_attempts` (each answer and its violations).
+  - **Missing skills in a letter (owner, 2026-10-09):** the commonest skip was a
+    paragraph naming a technology the owner lacks, even as "not yet". The letter now has
+    `learning` (at most 3 items, EN + TR names); code writes the only sentence that may
+    name them: "I have not worked with X yet, and I am keen to learn it quickly." Each
+    item must be in the posting and absent from `evidence_text()` (so it is a real gap);
+    never-claim terms are allowed there by the owner's choice, since the sentence admits
+    the gap. Paragraphs still fail on any unknown technology.
 - **Delete in History (owner, 2026-10-09):** one commit removes the CSV row and, for a
   tailored run, its folder plus its request and result files together (a request
   without a result would be rebuilt). A folder another row still uses is kept; preset

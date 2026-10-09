@@ -25,9 +25,12 @@ them, and never write a name, an email, a phone number or a link.
 7. Say nothing about the company that is not in the posting. No size, rankings,
    download or player counts, products, founding year or reputation from your own
    knowledge: the checks reject any number the candidate's sources do not contain.
-8. If the posting asks for something the candidate lacks, do not hint at having it. You
-   may say the candidate is keen to learn it only if the inventory supports that kind of
-   statement (for example, a skill listed as willingness to learn).
+8. If the posting asks for something the candidate lacks, never name it in a paragraph
+   and never hint at having it. Put up to 3 of the most important ones in `learning`
+   instead: short names as the posting writes them, with a Turkish name (technology
+   names stay as they are). The tool adds one sentence saying the candidate has not
+   worked with them yet and is keen to learn them. Never list something the candidate
+   has. Leave `learning` empty if nothing important is missing.
 
 # Shape
 

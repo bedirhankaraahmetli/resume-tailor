@@ -269,14 +269,14 @@ def _letter(data_dir: Path, cat: Catalog, req: RunRequest, router: Router, state
             d = req.fixture_dir or data_dir / "fixtures"
             letter = CoverLetter.model_validate_json(
                 (d / "letter.json").read_text(encoding="utf-8"))
-            g = check_letter(cat, letter, langs)
+            g = check_letter(cat, letter, langs, req.posting)
         else:
             assert req.posting is not None
             call = letter_call(cat, analysis=state.analysis, posting=req.posting,
                                tailoring=state.tailoring, note=req.note, langs=langs,
                                model=req.model)
             letter, resp, provider = router.run(call, CoverLetter.model_validate_json)
-            g = check_letter(cat, letter, langs)
+            g = check_letter(cat, letter, langs, req.posting)
             state.letter_attempts.append(_attempt(letter, g))
             if not g.ok:
                 log(f"letter guard: {len(g.violations)} problem(s); asking for one repair…")
@@ -289,7 +289,7 @@ def _letter(data_dir: Path, cat: Catalog, req: RunRequest, router: Router, state
                                  repair_prompt(call.user, resp.text, errors),
                                  CoverLetter, call.model_override)
                 letter, _ = router.call_on(provider, repair, CoverLetter.model_validate_json)
-                g = check_letter(cat, letter, langs)
+                g = check_letter(cat, letter, langs, req.posting)
                 state.letter_attempts.append(_attempt(letter, g))
     except Exception as e:  # never lose the resumes over the optional letter
         router.notices.append(f"Cover letter skipped: {describe(e)}")

@@ -242,11 +242,39 @@ _CONTACT = re.compile(r"https?://|www\.|\S+@\S+\.\w+")
 LETTER_MAX_WORDS = 400
 
 
-def check_letter(cat: Catalog, letter: CoverLetter, langs: tuple[str, ...]) -> GuardResult:
+LETTER_MAX_LEARNING = 3
+
+
+def check_letter(cat: Catalog, letter: CoverLetter, langs: tuple[str, ...],
+                 posting: str | None = None) -> GuardResult:
     """The fact guard for a cover letter: every paragraph cites its sources, and its
-    numbers, terms and technologies pass the same checks as a resume bullet."""
+    numbers, terms and technologies pass the same checks as a resume bullet.
+
+    `learning` is the one place a missing skill may appear, and only in a sentence code
+    writes ("I have not worked with X yet"). Each item must come from the posting and
+    must not be something the owner has: listing a skill they have as a gap would be
+    false too. Never-claim terms are allowed there, because the sentence admits the gap.
+    """
     v: list[Violation] = []
     texts = _Texts(cat, v)
+    if len(letter.learning) > LETTER_MAX_LEARNING:
+        v.append(Violation("learning", "learning", f"at most {LETTER_MAX_LEARNING} items"))
+    evidence = fold(cat.evidence_text())
+    posting_folded = fold(posting) if posting else None
+    for item in letter.learning:
+        where = f"learning '{item.en}'"
+        if not item.en.strip() or not item.tr.strip():
+            v.append(Violation("learning", where, "needs both 'en' and 'tr'"))
+            continue
+        if len(item.en) > 40 or len(item.tr) > 40 or _CONTACT.search(item.en + " " + item.tr):
+            v.append(Violation("learning", where, "a short name only, not a sentence"))
+        if posting_folded is not None and not (contains_term(posting_folded, item.en)
+                                               or contains_term(posting_folded, item.tr)):
+            v.append(Violation("learning", where, "is not in the posting; list only what "
+                               "the posting asks for"))
+        if contains_term(evidence, item.en):
+            v.append(Violation("learning", where, "the candidate has this (it is in the "
+                               "inventory); mention it in a paragraph or leave it out"))
     if not 2 <= len(letter.paragraphs) <= 5:
         v.append(Violation("letter", "paragraphs", "write 3 or 4 body paragraphs"))
     words = dict.fromkeys(langs, 0)

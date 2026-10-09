@@ -115,11 +115,21 @@ class LetterParagraph(_Strict):
                            "if Turkish was not requested.")
 
 
+class LearningItem(_Strict):
+    en: str = Field(description="Short name as the posting writes it, e.g. 'Kafka'.")
+    tr: str = Field(description="Its Turkish name; technology names stay as they are.")
+
+
 class CoverLetter(_Strict):
     """The body of a cover letter. Greeting, date, heading and sign-off are added in code,
     so the model never writes a name, an address or contact details."""
 
     paragraphs: list[LetterParagraph] = Field(description="3 or 4 body paragraphs, in order.")
+    learning: list[LearningItem] = Field(
+        description="Up to 3 things the posting asks for that the candidate does not have. "
+        "The tool adds one sentence saying the candidate has not worked with them yet and "
+        "is keen to learn them. Empty if nothing important is missing."
+    )
 
 
 LetterLangs = Literal["en", "tr", "both"]

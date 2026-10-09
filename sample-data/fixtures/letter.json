@@ -1,17 +1,24 @@
 {
   "paragraphs": [
     {
-      "sources": ["4.2", "3.1"],
+      "sources": [
+        "4.2",
+        "3.1"
+      ],
       "en": "I am applying for the Junior Machine Learning Engineer role at Northwind Labs. The posting asks for hands-on work with Python, model evaluation and explainability, which is the work I have enjoyed most in my projects and my internship.",
       "tr": "Northwind Labs'teki Junior Machine Learning Engineer pozisyonuna başvuruyorum. İlanda Python, model değerlendirme ve açıklanabilirlik konusunda uygulamalı deneyim isteniyor; bunlar projelerimde ve stajımda en çok keyif aldığım işler oldu."
     },
     {
-      "sources": ["4.2"],
+      "sources": [
+        "4.2"
+      ],
       "en": "In Churn Radar I predicted customer churn on a 7,000-row public telecom dataset with XGBoost and reached an ROC AUC of 0.84. I compared 4 models with stratified 5-fold cross-validation and used SHAP to explain the five strongest churn drivers.",
       "tr": "Churn Radar projesinde 7.000 satırlık açık bir telekom veri setinde XGBoost ile müşteri kaybını tahmin ettim ve 0,84 ROC AUC değerine ulaştım. 4 modeli tabakalı 5 katlı çapraz doğrulama ile karşılaştırdım ve en güçlü beş kayıp nedenini SHAP ile açıkladım."
     },
     {
-      "sources": ["3.1"],
+      "sources": [
+        "3.1"
+      ],
       "en": "At Acme Analytics I cleaned and analysed 2 years of sales data with Pandas and SQL and built a baseline demand forecasting model that the team used in 3 regional reports.",
       "tr": "Acme Analytics'teki stajımda 2 yıllık satış verisini Pandas ve SQL ile temizleyip analiz ettim ve ekibin 3 bölgesel raporda kullandığı temel bir talep tahmin modeli kurdum."
     },
@@ -19,6 +26,12 @@
       "sources": [],
       "en": "I would be glad to talk about how I could contribute to your team. Thank you for your time and consideration.",
       "tr": "Ekibinize nasıl katkı sağlayabileceğimi konuşmaktan memnuniyet duyarım. Zaman ayırdığınız için teşekkür ederim."
+    }
+  ],
+  "learning": [
+    {
+      "en": "Airflow",
+      "tr": "Airflow"
     }
   ]
 }

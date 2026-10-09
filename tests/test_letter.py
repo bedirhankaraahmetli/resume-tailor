@@ -10,8 +10,8 @@ import pytest
 from resume_tailor.catalog import Catalog, build_catalog
 from resume_tailor.config import load_config
 from resume_tailor.guard import check_letter
-from resume_tailor.letter import letter_date, preamble, render_letter
-from resume_tailor.models import ApplicationRequest, CoverLetter, letter_languages
+from resume_tailor.letter import learning_sentence, letter_date, preamble, render_letter
+from resume_tailor.models import ApplicationRequest, CoverLetter, LearningItem, letter_languages
 
 
 @pytest.fixture
@@ -85,3 +85,51 @@ def test_dates_and_language_choices() -> None:
     req = ApplicationRequest.model_validate({"id": "x", "posting": {"text": "p"},
                                              "cover_letter": False})
     assert req.cover_letter is None
+
+
+def _learning(cat: Catalog, letter: CoverLetter, posting: str, *names: str) -> set[str]:
+    letter.learning = [LearningItem(en=n, tr=n) for n in names]
+    return {str(v) for v in check_letter(cat, letter, ("en", "tr"), posting).violations}
+
+
+def test_learning_lists_only_real_gaps_from_the_posting(cat: Catalog, letter: CoverLetter,
+                                                         sample_dir: Path) -> None:
+    posting = (sample_dir / "fixtures/posting.txt").read_text("utf-8")
+    # Airflow is asked for and missing; Kubernetes is on the never-claim list, and saying
+    # "not yet" about it is true, so it is allowed here and nowhere else.
+    assert _learning(cat, letter, posting, "Airflow", "Kubernetes") == set()
+    # Python is in the inventory: calling it a gap would be false too.
+    assert any("candidate has this" in v for v in _learning(cat, letter, posting, "Python"))
+    # Rust is not in the posting.
+    assert any("not in the posting" in v for v in _learning(cat, letter, posting, "Rust"))
+    assert any("at most 3" in v
+               for v in _learning(cat, letter, posting, "Airflow", "AWS", "FastAPI", "Kubernetes"))
+
+
+def test_a_missing_skill_named_in_a_paragraph_still_fails(cat: Catalog, letter: CoverLetter,
+                                                          sample_dir: Path) -> None:
+    posting = (sample_dir / "fixtures/posting.txt").read_text("utf-8")
+    p = letter.paragraphs[0]
+    letter.paragraphs[0] = p.model_copy(update={"en": (p.en or "") + " I use Airflow daily."})
+    codes = {v.code for v in check_letter(cat, letter, ("en", "tr"), posting).violations}
+    assert "unknown-tech" in codes
+
+
+def test_the_learning_sentence_is_written_by_code(letter: CoverLetter,
+                                                  sample_dir: Path) -> None:
+    letter.learning = [LearningItem(en="Airflow", tr="Airflow"),
+                       LearningItem(en="system design", tr="sistem tasarımı")]
+    assert learning_sentence(letter, "en") == ("I have not worked with Airflow and system "
+                                               "design yet, and I am keen to learn them quickly.")
+    assert learning_sentence(letter, "tr") == ("Airflow ve sistem tasarımı ile henüz "
+                                               "çalışmadım, ancak bunları hızlıca öğrenmeye "
+                                               "hazırım.")
+    letter.learning = letter.learning[:1]
+    base = (sample_dir / "base/en/resume.tex").read_text("utf-8")
+    tex = render_letter(base, letter, "en", company=None, position="ML Engineer",
+                        signer="Deniz Yılmaz", today=date(2026, 10, 9))
+    # Its own paragraph, just before the closing one.
+    learn = tex.index("I have not worked with Airflow yet, and I am keen to learn it quickly.")
+    assert tex.index("3 regional reports") < learn < tex.index("I would be glad to talk")
+    letter.learning = []
+    assert learning_sentence(letter, "en") is None

@@ -40,6 +40,27 @@ def preamble(resume_tex: str) -> str:
     return text[:cut]
 
 
+def _join(items: list[str], lang: str) -> str:
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + (" ve " if lang == "tr" else " and ") + items[-1]
+
+
+def learning_sentence(letter: CoverLetter, lang: str) -> str | None:
+    """The one sentence that may name a missing skill, written here so its wording can
+    only ever admit the gap ("not yet, keen to learn"), never claim it."""
+    names = [(i.tr if lang == "tr" else i.en).strip() for i in letter.learning]
+    names = [n for n in names if n]
+    if not names:
+        return None
+    what = _join(names, lang)
+    if lang == "tr":
+        them = "bunları" if len(names) > 1 else "bunu"
+        return f"{what} ile henüz çalışmadım, ancak {them} hızlıca öğrenmeye hazırım."
+    them = "them" if len(names) > 1 else "it"
+    return f"I have not worked with {what} yet, and I am keen to learn {them} quickly."
+
+
 def render_letter(resume_tex: str, letter: CoverLetter, lang: str, *, company: str | None,
                   position: str, signer: str, today: date) -> str:
     """The complete `letter.tex`. Deterministic: the same inputs give the same text."""
@@ -47,6 +68,10 @@ def render_letter(resume_tex: str, letter: CoverLetter, lang: str, *, company: s
     paragraphs = [p.strip() for p in paragraphs if p.strip()]
     if not paragraphs:
         raise LetterError(f"the letter has no {lang} text")
+    learning = learning_sentence(letter, lang)
+    if learning:
+        # Before the closing paragraph, which thanks the reader and should come last.
+        paragraphs.insert(max(len(paragraphs) - 1, 1), learning)
     if lang == "tr":
         greeting = f"Sayın {company} İşe Alım Ekibi," if company else "Sayın Yetkili,"
         subject = f"{position} pozisyonu için başvuru"
