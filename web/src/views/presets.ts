@@ -26,7 +26,7 @@ export async function showPresets(view: View, gh: GitHub): Promise<void> {
   const stale = report.presets.filter((p) => p.status !== "up to date");
   const out = h("div");
   const rebuildAll = h("button", { class: "secondary", disabled: stale.length === 0 },
-    `Rebuild ${stale.length} outdated`);
+    stale.length ? `Rebuild ${stale.length} outdated` : "All presets are up to date");
   rebuildAll.addEventListener("click", busy(rebuildAll, out, async () => {
     if (!confirm(`Rebuild ${stale.length} preset(s)? About $0.04 each on the Claude API.`)) return;
     await rebuild(gh, "stale", "outdated presets");

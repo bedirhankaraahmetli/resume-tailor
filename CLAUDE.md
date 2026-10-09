@@ -33,6 +33,10 @@ There are two repos:
   repo's workflow that `tailor init-data-repo` writes. It runs the stages as separate steps
   through `jobs.py` (`tailor request start|analyze|tailor|compile|finish`). The step names
   are a contract with the web app. Design notes are in PLAN.md §0, "Phase 2 notes".
+- **The web app** is `web/` (Vite + TypeScript, no framework), deployed to Pages by
+  `pages.yml`. Only `web/src/github.ts` talks to the network, and the CSP in
+  `vite.config.ts` limits it to `api.github.com`. Gates: `npm run typecheck`,
+  `npm test` and `npm run build` in `web/`.
 - **`tailor check --data-dir ../resume-data`** must pass after any change to the base
   parser or renderer: it runs the identity round-trip on the real data.
 - **Tests:** run `RT_DATA_DIR=../resume-data pytest` to include the real-data tests.

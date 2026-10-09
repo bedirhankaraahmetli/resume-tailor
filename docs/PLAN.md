@@ -130,6 +130,46 @@ replaces "the request path as input" from PROMPT.md §8.
   conflict, for example the web app editing `applications.csv` at the same moment, still
   fails the push. Phase 3's CSV edits should retry on their side (§2.10).
 
+### Phase 3 notes (2026-10-09)
+
+**`presets/status.json` comes from the workflow.** The browser cannot compute a preset's
+status. The input hash includes the preset's YAML entry in Python's canonical JSON form,
+and reproducing that would need a YAML parser in the page. So `tailor request finish`
+writes the file on every run. The data repo's workflow also starts on pushes to `base/**`,
+`career-inventory.md` and `presets.yml`, only to refresh it. Those runs make no LLM call
+and take about 25 s.
+
+**Web dependencies (runtime):**
+- `pdfjs-dist`, for posting text and PDF previews. It is lazy-loaded, about 130 KB
+  gzipped.
+- `tweetnacl` and `blakejs`, for the libsodium sealed box that GitHub requires for
+  secrets. WebCrypto has X25519 but not XSalsa20-Poly1305.
+
+All three have zero dependencies. `libsodium-wrappers` is a dev dependency only; a test
+uses it to open our sealed box.
+
+**Verified in a browser** (an isolated headless Chrome, both the local build and the
+deployed site):
+- Settings: saving and testing; the token is encrypted in localStorage and plain only in
+  sessionStorage.
+- Unlocking, with a wrong and then the right passphrase.
+- History; the folder and result views, with both PDF previews and the report.
+- Quick apply; PDF text extraction.
+- Desktop and iPhone widths, in dark mode.
+- No CSP violations.
+
+**Not verified by me:**
+- A live submission with real step-by-step status, because it spends credits. It is the
+  owner's acceptance test.
+- Save to folder, which needs a real directory picker.
+- The iPhone share sheet.
+- Saving an API key, which would overwrite the real secret. The sealed box is
+  unit-tested against libsodium.
+
+**pdf.js renders through `requestAnimationFrame`.** That is paused in hidden tabs, so a
+preview started in a background tab finishes when the tab is shown. This is harmless for
+users, but it made headless tests hang until the tab was brought to the front.
+
 ---
 
 ## 1. Scope (restated)

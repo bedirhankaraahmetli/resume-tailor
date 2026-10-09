@@ -13,8 +13,8 @@ Turkish), generated from your own LaTeX resume, plus a keyword match report.
 - **Private.** Your name, contact details and links never reach an LLM provider: they are
   redacted, and the call aborts if anything personal survives.
 
-> Status: Phase 2 (core, CLI and GitHub Actions). The web app (for use from a phone)
-> comes in Phase 3. See [docs/PLAN.md](docs/PLAN.md).
+> Status: Phase 3 (core, CLI, GitHub Actions and the web app). See
+> [docs/PLAN.md](docs/PLAN.md).
 
 ## Quick start (CLI)
 
@@ -62,6 +62,37 @@ tlmgr install babel-english babel-turkish cm-super enumitem fancyhdr fontawesome
 
 XeLaTeX, LuaLaTeX and Tectonic are not supported: the template uses pdfTeX primitives
 that keep the PDF text layer clean for applicant-tracking systems.
+
+## The web app (PC and iPhone)
+
+<https://bedirhankaraahmetli.github.io/resume-tailor/> is a static page. It holds no data
+and talks to nothing but `api.github.com`, using a token you give it for your own private
+data repo.
+
+1. **Create a fine-grained token** on GitHub: Settings → Developer settings → Personal
+   access tokens → Fine-grained tokens → Generate new token.
+   - **Expiration:** 90 days or less.
+   - **Repository access:** Only select repositories → your private `resume-data`.
+   - **Permissions:** Contents: Read and write; Actions: Read-only. Optionally,
+     Secrets: Read and write, which lets the page manage your API keys.
+2. **Open the page → Settings.** Enter the repo, the token and a passphrase. The token is
+   encrypted with the passphrase (PBKDF2 → AES-GCM) before it is stored. The decrypted
+   copy lives only in the tab's session, so you type the passphrase once per session.
+3. **New.** Paste a posting, or load a `.txt` or `.pdf` file; its text is extracted in
+   the browser. The page commits a request file and shows the live status: queued →
+   analyzing → tailoring → compiling → done.
+4. **Result.** You get both PDFs (previews and downloads) and the match report.
+   - **Chrome or Edge on Windows:** **Save to folder** asks once for your
+     `Job Applications` folder, remembers it, and writes `<Company> - <Position>/` there.
+   - **iPhone:** **Share or save to Files** opens the share sheet.
+5. **Quick apply** lists the presets with their status (up to date, outdated or never
+   built). From there you can open, rebuild, save or log an application. **History**
+   shows `applications.csv`.
+
+**Why the passphrase:** every GitHub Pages site of one account shares one origin, and so
+one `localStorage`. Any other Pages project on the account could read a token stored there
+in plain text. A strict Content-Security-Policy (`connect-src https://api.github.com`)
+means the page cannot send the token anywhere else.
 
 ## LLM providers and what they cost
 
@@ -130,8 +161,8 @@ this repo's reusable workflow, which commits the PDFs, the report and
    Never paste a key into a file in either repo, an issue or a chat. The workflow passes
    keys only to the two steps that call a provider and never prints them.
 
-3. **Make a request** by committing `requests/<id>.json` (the web app will do this for
-   you in Phase 3; the format is in the data repo's README):
+3. **Make a request** from the web app (below), or by committing `requests/<id>.json`
+   yourself (the format is in the data repo's README):
 
    ```json
    { "schema_version": 1, "type": "application", "id": "20261009-141205-abc-firm",
@@ -160,6 +191,8 @@ this repo's reusable workflow, which commits the PDFs, the report and
 pip install -e ".[dev]"
 ruff check src tests scripts && mypy && pytest
 RT_DATA_DIR=../resume-data pytest              # also run the real-data tests
+cd web && npm ci && npm run typecheck && npm test && npm run build   # the web app
+npm run dev                                     # local dev server (no CSP in dev)
 python scripts/privacy_scan.py --data-dir ../resume-data
 ```
 
