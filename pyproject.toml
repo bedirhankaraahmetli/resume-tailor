@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "resume-tailor"
-version = "0.1.0"
+version = "1.0.0"
 description = "Tailor a LaTeX resume (EN + TR) to a job posting, truthfully."
 readme = "README.md"
 license = "MIT"

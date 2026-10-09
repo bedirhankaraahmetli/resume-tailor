@@ -1,7 +1,9 @@
 # Resume Tailor
 
 Paste a job posting; get **two one-page PDF resumes tailored to it** (English and
-Turkish), generated from your own LaTeX resume, plus a keyword match report.
+Turkish), generated from your own LaTeX resume, plus a keyword match report and, if you
+want one, a cover letter. It runs from a phone or a PC, on GitHub Actions, with your data
+in a private repo.
 
 - **Truthful by construction.** The model only selects, reorders and rephrases what is in
   your `career-inventory.md`. A deterministic fact guard rejects any number, skill,
@@ -12,9 +14,69 @@ Turkish), generated from your own LaTeX resume, plus a keyword match report.
   by dropping the lowest-priority content, never by shrinking fonts or margins.
 - **Private.** Your name, contact details and links never reach an LLM provider: they are
   redacted, and the call aborts if anything personal survives.
+- **Cheap and capped.** A run costs about $0.10–0.15, every call is logged with its exact
+  cost, and a monthly budget switches to a free fallback instead of overspending.
 
-> Status: Phase 3 (core, CLI, GitHub Actions and the web app). See
-> [docs/PLAN.md](docs/PLAN.md).
+| English resume | Turkish resume | Cover letter |
+|---|---|---|
+| ![Sample English resume](docs/images/sample-resume-en.png) | ![Sample Turkish resume](docs/images/sample-resume-tr.png) | ![Sample cover letter](docs/images/sample-cover-letter-en.png) |
+
+*Generated from the fictional person in [`sample-data/`](sample-data/) with
+`tailor run --dry-run --cover-letter both`.*
+
+## How it works
+
+```mermaid
+flowchart LR
+  subgraph you[" "]
+    web["Web app<br/>(GitHub Pages)"]
+    cli["CLI"]
+  end
+  subgraph data["resume-data (private repo)"]
+    req["requests/&lt;id&gt;.json"]
+    out["applications/&lt;Company - Position&gt;/<br/>PDFs, match report<br/>results/&lt;id&gt;.json, applications.csv"]
+  end
+  subgraph tool["resume-tailor (this repo)"]
+    wf["Reusable workflow"]
+    pipe["analyze → tailor → fact guard<br/>→ render → fit (pdfLaTeX) → checks"]
+  end
+  llm[("Claude API<br/>Claude Code · Gemini")]
+
+  web -- "commit, via api.github.com" --> req
+  req -- "push starts" --> wf --> pipe
+  cli --> pipe
+  pipe -- "redacted text only" --> llm
+  llm -- "JSON, checked by Pydantic" --> pipe
+  pipe -- "commit" --> out
+  out -- "read" --> web
+```
+
+1. **Analyze.** A small model reads the posting: company, position, must-haves, keywords.
+2. **Tailor.** The tailoring model picks, orders and rephrases content from your
+   inventory, and returns JSON that cites an inventory section for every bullet.
+3. **Fact guard.** Code checks every number, skill, technology, project and status
+   against the cited sources. One repair round, then the run fails with the list.
+4. **Render and fit.** Python escapes the text into your own LaTeX macros; pdfLaTeX
+   compiles both languages, which are fitted to one page together.
+5. **Check and publish.** One page each, a clean ATS text layer, keyword coverage; then
+   the PDFs, the report and a log row are committed to your data repo.
+
+## Set up in 10 minutes
+
+1. **Fork or clone** this repo, and install Python 3.12+ and TinyTeX (see
+   [TinyTeX](#tinytex)). `pip install -e .` gives you the `tailor` command.
+2. **Make your data folder:** `gh repo create resume-data --private`, then
+   `tailor init-data-repo ../resume-data`. Replace the fictional sample with your own
+   `base/en`, `base/tr`, `career-inventory.md` and `config.yml`, and run
+   `tailor check --data-dir ../resume-data` until it passes.
+3. **Buy a few dollars of Claude API credits** and store the key as the data repo's
+   `ANTHROPIC_API_KEY` secret ([Setting up the Claude API](#setting-up-the-claude-api)).
+4. **Push the data repo** to GitHub.
+5. **Open the web app**, enter the repo and a fine-grained token
+   ([The web app](#the-web-app-pc-and-iphone)), paste a posting, and tailor.
+
+Steps 2 and 3 are the only ones that take thought: the inventory is where every fact you
+may claim lives, and it is worth writing carefully once.
 
 ## Quick start (CLI)
 
@@ -31,6 +93,8 @@ tailor run --data-dir sample-data --dry-run --posting sample-data/fixtures/posti
 ```bash
 tailor run --data-dir ../resume-data --posting posting.txt          # or .pdf, or - for stdin
 tailor run --data-dir ../resume-data --posting posting.txt --company "ABC" --position "Veri Bilimci" --note "emphasize iOS"
+tailor run --data-dir ../resume-data --posting posting.txt --cover-letter both   # en, tr or both
+tailor run --data-dir ../resume-data --regenerate <request-id> --note "lead with iOS"
 tailor preset list  --data-dir ../resume-data
 tailor preset build --data-dir ../resume-data --stale               # only outdated presets
 tailor keys list                                                    # which API keys are set (masked)
@@ -81,13 +145,20 @@ data repo.
 3. **New.** Paste a posting, or load a `.txt` or `.pdf` file; its text is extracted in
    the browser. The page commits a request file and shows the live status: queued →
    analyzing → tailoring → compiling → done.
+   Choose a **cover letter** in English, Turkish or both, or none.
 4. **Result.** You get both PDFs (previews and downloads) and the match report.
    - **Chrome or Edge on Windows:** **Save to folder** asks once for your
      `Job Applications` folder, remembers it, and writes `<Company> - <Position>/` there.
    - **iPhone:** **Share or save to Files** opens the share sheet.
+   - **Regenerate with a note** at the bottom of the result tailors it again ("lead with
+     the iOS projects"). It reuses the posting analysis and replaces the files in place.
 5. **Quick apply** lists the presets with their status (up to date, outdated or never
-   built). From there you can open, rebuild, save or log an application. **History**
-   shows `applications.csv`.
+   built). From there you can open, rebuild, save or log an application.
+6. **History** shows `applications.csv`. Change an application's status (applied,
+   interview, offer, rejected) or delete it; each change is one commit.
+7. **Settings → Skills** adds a skill with its Turkish name and evidence to your
+   inventory and `config.yml` in one commit, after checking it against duplicates and
+   your "never claim" list.
 
 **Why the passphrase:** every GitHub Pages site of one account shares one origin, and so
 one `localStorage`. Any other Pages project on the account could read a token stored there
@@ -116,7 +187,9 @@ credentials:
   free tier is a separate, rate-limited offer, and its data terms differ from paid use.
 
 A typical run costs about **$0.10–0.15** on `claude-sonnet-5-5`, so a `monthly_budget_usd`
-of 5 covers roughly 30–45 applications. Before each run, a budget guard sums this
+of 5 covers roughly 30–45 applications. A cover letter adds about $0.03–0.05 (one
+language saves about $0.01; the inventory it reads is most of the cost), and a regenerate
+costs one tailoring call, about $0.05–0.10. Before each run, a budget guard sums this
 month's spend in `usage.csv`. If the run would exceed the budget, it skips the Claude API
 and uses the next provider. When credits run out, the tool says so and falls back the
 same way.
@@ -185,6 +258,21 @@ this repo's reusable workflow, which commits the PDFs, the report and
 - **No loops.** Its own commit cannot trigger it again: pushes made with `GITHUB_TOKEN`
   never start workflows, and the trigger is limited to `requests/**.json`.
 
+## Privacy
+
+- **The public repo holds no personal data.** Your resumes, inventory, outputs and logs
+  live in your private data repo. CI runs gitleaks and
+  [`scripts/privacy_scan.py`](scripts/privacy_scan.py), which fails on any email or phone
+  number other than the sample person's, and on your own contact strings (passed as a
+  secret, never stored here).
+- **LLM providers see redacted text only.** `heading.tex`, the inventory's contact
+  section, your name, phone, email and every URL are removed before a call, and the final
+  payload is checked against your contact strings; the call aborts if one survives.
+- **The web app has no server.** It is static, loads no third-party script, has no
+  analytics, and its Content-Security-Policy lets it talk only to `api.github.com`.
+- **Keys stay in GitHub.** API keys are Actions secrets, encrypted in the browser before
+  they are sent; the page cannot read them back.
+
 ## Development
 
 ```bash
@@ -201,5 +289,5 @@ Tests never call a live LLM: sockets are blocked and API keys are removed in
 
 ## License
 
-MIT (added in Phase 5). The LaTeX template in `sample-data/base` is based on the MIT-
-licensed resume template credited in its header.
+[MIT](LICENSE). The LaTeX template in `sample-data/base` is based on the MIT-licensed
+resume template credited in its header.
