@@ -38,7 +38,10 @@ jobs:
           # Newline-separated contact strings, stored as a secret so they never appear here.
           RT_DENYLIST: ${{ secrets.PRIVACY_DENYLIST }}
         run: python scripts/privacy_scan.py
+      # The whole history on every push. gitleaks-action scans only the pushed range and
+      # fails outright when that range starts at the root commit (`<root>^` does not exist).
+      # --user: git refuses a checkout owned by another uid ("dubious ownership").
       - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo"
+          zricethezav/gitleaks:v8.24.3 git /repo --redact --verbose --exit-code 1
