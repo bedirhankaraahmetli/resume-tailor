@@ -1,0 +1,30 @@
+{
+ "company": "Northwind Labs",
+ "position": "Machine Learning Engineer (Junior)",
+ "posting_language": "en",
+ "seniority": "junior",
+ "must_have": ["Python", "Pandas", "SQL", "machine learning fundamentals", "cross-validation", "Git"],
+ "nice_to_have": ["Kubernetes or AWS", "Airflow"],
+ "keywords": [
+  {"term": "machine learning", "synonyms": ["ML", "makine öğrenmesi"], "importance": "must"},
+  {"term": "Python", "synonyms": [], "importance": "must"},
+  {"term": "Pandas", "synonyms": [], "importance": "must"},
+  {"term": "SQL", "synonyms": [], "importance": "must"},
+  {"term": "cross-validation", "synonyms": ["cross validation", "çapraz doğrulama"], "importance": "must"},
+  {"term": "Git", "synonyms": [], "importance": "must"},
+  {"term": "classification", "synonyms": ["sınıflandırma"], "importance": "must"},
+  {"term": "XGBoost", "synonyms": [], "importance": "must"},
+  {"term": "scikit-learn", "synonyms": ["sklearn"], "importance": "must"},
+  {"term": "SHAP", "synonyms": ["explainability"], "importance": "must"},
+  {"term": "recommender systems", "synonyms": ["recommender", "recommendation system"], "importance": "must"},
+  {"term": "PyTorch", "synonyms": [], "importance": "must"},
+  {"term": "REST API", "synonyms": ["REST"], "importance": "must"},
+  {"term": "Flask", "synonyms": [], "importance": "nice"},
+  {"term": "FastAPI", "synonyms": [], "importance": "nice"},
+  {"term": "Docker", "synonyms": [], "importance": "must"},
+  {"term": "Kubernetes", "synonyms": ["k8s"], "importance": "nice"},
+  {"term": "AWS", "synonyms": ["Amazon Web Services"], "importance": "nice"},
+  {"term": "Airflow", "synonyms": [], "importance": "nice"},
+  {"term": "churn prediction", "synonyms": ["churn"], "importance": "nice"}
+ ]
+}

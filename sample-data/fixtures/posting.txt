@@ -1,0 +1,18 @@
+Northwind Labs — Machine Learning Engineer (Junior)
+
+We build recommendation and churn-prediction products for subscription businesses.
+
+What you will do
+- Build and evaluate classification models (XGBoost, scikit-learn)
+- Explain model decisions to product teams with SHAP
+- Work on our recommender systems with PyTorch
+- Ship models behind REST APIs (Flask or FastAPI) packaged with Docker
+
+Requirements
+- Python, Pandas, SQL
+- Machine learning fundamentals and cross-validation
+- Git
+
+Nice to have
+- Kubernetes or AWS
+- Experience with Airflow

@@ -1,0 +1,79 @@
+{
+ "experience": [
+  {"id": "3.1", "bullets": [
+   {"sources": ["3.1"], "priority": 1,
+    "en": "Built a baseline demand forecasting model that the team used in 3 regional reports.",
+    "tr": "Ekibin 3 bölgesel raporda kullandığı temel bir talep tahmini modeli geliştirdim."},
+   {"sources": ["3.1"], "priority": 2,
+    "en": "Cleaned and analysed 2 years of sales data with Pandas and SQL for a weekly demand dashboard.",
+    "tr": "Haftalık talep panosu için Pandas ve SQL ile 2 yıllık satış verisini temizleyip analiz ettim."}
+  ]},
+  {"id": "3.2", "bullets": [
+   {"sources": ["3.2"], "priority": 3,
+    "en": "Built 4 SwiftUI screens for a fitness app and wrote XCTest unit tests for their view models.",
+    "tr": "Bir fitness uygulaması için 4 SwiftUI ekranı geliştirdim ve view model'leri için XCTest birim testleri yazdım."}
+  ]}
+ ],
+ "projects": [
+  {"id": "4.2", "title_en": null, "title_tr": null,
+   "stack": ["Python", "XGBoost", "Scikit-learn", "SHAP", "Pandas"],
+   "bullets": [
+    {"sources": ["4.2"], "priority": 1,
+     "en": "Predicted customer churn on a 7,000-row public telecom dataset with an XGBoost classification model, reaching an ROC AUC of 0.84.",
+     "tr": "7.000 satırlık açık bir telekom veri setinde XGBoost sınıflandırma modeliyle müşteri kaybını tahmin ettim ve 0,84 ROC AUC değerine ulaştım."},
+    {"sources": ["4.2"], "priority": 2,
+     "en": "Compared 4 models with stratified 5-fold cross-validation.",
+     "tr": "4 modeli tabakalı 5 katlı çapraz doğrulama ile karşılaştırdım."},
+    {"sources": ["4.2"], "priority": 2,
+     "en": "Explained the model with SHAP and listed the five strongest churn drivers.",
+     "tr": "Modeli SHAP ile açıkladım ve müşteri kaybını en çok etkileyen beş faktörü belirledim."}
+   ]},
+  {"id": "4.4", "title_en": "Recipe Recommender -- PyTorch Recommender System", "title_tr": "Tarif Önerici -- PyTorch Öneri Sistemi",
+   "stack": ["Python", "PyTorch", "Flask"],
+   "bullets": [
+    {"sources": ["4.4"], "priority": 1,
+     "en": "Built a recipe recommender system with PyTorch embeddings over 20,000 recipes, served through a Flask REST API.",
+     "tr": "20.000 tarif üzerinde PyTorch gömmeleriyle bir tarif öneri sistemi geliştirdim ve Flask REST API ile sundum."}
+   ]},
+  {"id": "4.3", "title_en": null, "title_tr": null,
+   "stack": ["Java 17", "Spring Boot 3", "PostgreSQL", "Docker"],
+   "bullets": [
+    {"sources": ["4.3"], "priority": 2,
+     "en": "Built a REST API for shared expenses with Spring Boot and PostgreSQL, packaged with Docker.",
+     "tr": "Spring Boot ve PostgreSQL ile ortak harcamalar için bir REST API geliştirdim ve Docker ile paketledim."},
+    {"sources": ["4.3"], "priority": 4,
+     "en": "Covered the service layer with JUnit 5 tests.",
+     "tr": "Servis katmanını JUnit 5 testleriyle kapsadım."}
+   ]},
+  {"id": "4.1", "title_en": null, "title_tr": null,
+   "stack": ["Swift", "SwiftUI", "MapKit", "XCTest"],
+   "bullets": [
+    {"sources": ["4.1"], "priority": 3,
+     "en": "Built and shipped an iOS app that shows free parking spots near the user on a map.",
+     "tr": "Kullanıcının yakınındaki boş park yerlerini haritada gösteren bir iOS uygulaması geliştirip yayınladım."}
+   ]}
+ ],
+ "education": [{"id": "2.1", "courses": ["Machine Learning", "Databases", "Statistics", "Data Structures", "Software Engineering"]}],
+ "certificates": ["5.1", "5.2"],
+ "skills": [
+  {"group": "machine-learning-data", "items": ["Scikit-learn", "XGBoost", "SHAP", "PyTorch", "Pandas", "Matplotlib"]},
+  {"group": "programming-languages", "items": ["Python", "SQL", "Java", "Swift"]},
+  {"group": "frameworks", "items": ["Flask", "Spring Boot", "SwiftUI"]},
+  {"group": "tools", "items": ["Git", "Docker", "PostgreSQL", "Unit testing"]}
+ ],
+ "reserve": [
+  {"parent": "4.1", "bullet": {"sources": ["4.1"], "priority": 4,
+   "en": "Wrote 120+ unit and UI tests with XCTest.",
+   "tr": "XCTest ile 120'den fazla birim ve arayüz testi yazdım."}},
+  {"parent": "3.2", "bullet": {"sources": ["3.2"], "priority": 4,
+   "en": "Fixed accessibility issues found in a VoiceOver audit.",
+   "tr": "VoiceOver denetiminde bulunan erişilebilirlik sorunlarını düzelttim."}}
+ ],
+ "changes": [
+  "Led with Churn Radar: classification, XGBoost, SHAP and cross-validation match the posting.",
+  "Added Recipe Recommender (not on the base resume) for recommender systems and PyTorch.",
+  "Moved Parkly last; iOS is less relevant to this role.",
+  "Put Machine Learning & Data first in skills."
+ ],
+ "gaps": ["Kubernetes", "AWS", "Airflow", "FastAPI"]
+}

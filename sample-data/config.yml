@@ -1,0 +1,60 @@
+# Sample configuration for the fictional Deniz Yılmaz (see career-inventory.md).
+# A real data repo uses the same keys; `tailor init-data-repo` writes a template.
+
+owner:
+  slug: Deniz_Yilmaz
+  names:
+    - Deniz Yılmaz
+    - Deniz YILMAZ
+  email: deniz.yilmaz@example.com
+  contact_strings:
+    - "+90 555 010 20 30"
+    - deniz.yilmaz@example.com
+    - linkedin.com/in/deniz-yilmaz-sample
+    - github.com/deniz-yilmaz-sample
+    - deniz-yilmaz-sample
+    - Kadıköy
+
+providers:
+  order: [anthropic, claude-code, gemini]
+  anthropic:
+    analyze_model: claude-haiku-4-5
+    tailor_model: claude-sonnet-5-5
+    analyze_effort: null
+    tailor_effort: medium
+    max_tokens: 16000
+    prompt_cache: true
+  claude-code:
+    model: sonnet
+    timeout_s: 900
+  gemini:
+    model: gemini-3.8-flash
+    thinking_level: low
+    max_retries: 3
+
+pricing:
+  as_of: "2026-10-09"
+  source: https://platform.claude.com/docs/en/about-claude/pricing
+  models:
+    claude-sonnet-5-5: {input: 2.00, output: 10.00, cache_write: 2.50, cache_read: 0.20}
+    claude-haiku-4-5:  {input: 1.00, output: 5.00,  cache_write: 1.25, cache_read: 0.10}
+
+monthly_budget_usd: 5
+estimated_run_cost_usd: 0.25
+
+resume:
+  min_projects: 3
+  max_stack_items: 7
+  fill_threshold: 0.12
+  fixed_skill_rows: 1
+  min_courses: 4
+  course_names_tr:
+    Operating Systems: İşletim Sistemleri
+    Computer Networks: Bilgisayar Ağları
+  skill_names_tr:
+    Unit testing: Birim testi
+  extra_skill_groups:
+    - {id: mobile, en: Mobile, tr: Mobil}
+    - {id: backend, en: Backend, tr: Backend}
+  never_claim_tr:
+    - takım liderliği

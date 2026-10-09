@@ -1,0 +1,17 @@
+presets:
+  - id: data-science-ml
+    folder: "Data Science - ML"
+    position: "Data Scientist"
+    focus: >
+      Data science and machine learning roles: modeling, evaluation, explainability,
+      Python data stack, recommender systems.
+  - id: ios-mobile
+    folder: "iOS - Mobile"
+    position: "iOS Developer"
+    focus: >
+      iOS and mobile roles: Swift, SwiftUI, native platform APIs, testing, accessibility.
+  - id: backend
+    folder: "Backend"
+    position: "Backend Developer"
+    focus: >
+      Backend roles: Java, Spring Boot, REST APIs, databases, Docker, testing.

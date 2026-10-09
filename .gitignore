@@ -1,0 +1,35 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Local tool output (never commit real resumes or applications)
+.tailor-work/
+out/
+Job Applications/
+*.aux
+*.log
+*.out
+
+# Web
+web/node_modules/
+web/dist/
+
+# Never commit anything from the private data repo by accident
+resume-data/
+career-inventory.md
+!sample-data/career-inventory.md
+
+# The original spec names the owner; kept local until the owner decides to publish it.
+PROMPT.md

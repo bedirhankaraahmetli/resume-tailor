@@ -1,0 +1,14 @@
+# LaTeX packages the resume template needs on top of TinyTeX's base.
+# (latexsym, hyperref, tools and xkeyval are already part of TinyTeX.)
+babel-english
+babel-turkish
+cm-super
+enumitem
+fancyhdr
+fontawesome5
+fontaxes
+lato
+marvosym
+mweights
+preprint
+titlesec

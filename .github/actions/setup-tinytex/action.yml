@@ -1,0 +1,22 @@
+name: Set up TinyTeX (pdfLaTeX)
+description: >
+  Installs TinyTeX with exactly the packages the resume template needs, cached between
+  runs. pdfLaTeX only: the template relies on pdfTeX primitives for a clean ATS text layer.
+runs:
+  using: composite
+  steps:
+    - name: Cache TinyTeX
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.TinyTeX
+        key: tinytex-v1-${{ runner.os }}-${{ hashFiles('.github/actions/setup-tinytex/packages.txt') }}
+    - name: Install TinyTeX
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        curl -fsSL https://yihui.org/tinytex/install-bin-unix.sh | sh
+        ~/.TinyTeX/bin/*/tlmgr install $(grep -v '^#' "${{ github.action_path }}/packages.txt" | xargs)
+    - name: Add TinyTeX to PATH
+      shell: bash
+      run: echo "$(echo ~/.TinyTeX/bin/*)" >> "$GITHUB_PATH"

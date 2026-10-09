@@ -1,0 +1,89 @@
+%-------------------------
+% Resume in Latex
+% Author : ETH juniors
+% Inspired by: https://github.com/sb2nov/resume
+% License : MIT
+% Website : www.ethjuniors.ch
+%------------------------
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{fontawesome5}
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{fancyhdr}
+\usepackage[turkish,shorthands=off]{babel}
+\usepackage{tabularx}
+\input{glyphtounicode}
+% Map fi/fl/ff ligature glyphs to plain letters in the PDF text layer,
+% so ATS parsers read "filtering", "Certifications" etc. as normal words
+\pdfglyphtounicode{uniFB00}{0066 0066}\pdfglyphtounicode{uniFB01}{0066 0069}\pdfglyphtounicode{uniFB02}{0066 006C}
+\pdfglyphtounicode{uniFB03}{0066 0066 0069}\pdfglyphtounicode{uniFB04}{0066 0066 006C}
+
+
+
+% Custom font
+\usepackage[default]{lato}
+
+\pagestyle{fancy}
+\fancyhf{} % clear all header and footer fields
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Adjust margins
+\addtolength{\oddsidemargin}{-0.5in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1in}
+\addtolength{\topmargin}{-.5in}
+\addtolength{\textheight}{1.0in}
+
+\urlstyle{same}
+
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+% Sections formatting
+\titleformat{\section}{
+  \vspace{-4pt}\scshape\raggedright\large
+}{}{0em}{}[\color{black}\titlerule\vspace{-5pt}]
+
+% Ensure that generate pdf is machine readable/ATS parsable
+\pdfgentounicode=1
+
+%-------------------------%
+% Custom commands
+\input{custom-commands}
+
+\begin{document}
+
+%-------------------------------------------%
+%%%%%%  RESUME STARTS HERE  %%%%%
+
+%----------HEADING----------%
+\input{src/heading}
+
+%-----------EDUCATION-----------%
+\input{src/education.tex}
+%-----------EXPERIENCE-----------%
+\input{src/experience}
+
+%-----------PROJECTS-----------%
+\input{src/projects}
+
+%-----------EXTRACURRICULAR-----------%
+\input{src/certificates}
+
+%-----------SKILLS-----------%
+\input{src/skills.tex}
+
+%-------------------------------------------%
+\end{document}
