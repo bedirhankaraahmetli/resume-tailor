@@ -133,3 +133,12 @@ def test_the_learning_sentence_is_written_by_code(letter: CoverLetter,
     assert tex.index("3 regional reports") < learn < tex.index("I would be glad to talk")
     letter.learning = []
     assert learning_sentence(letter, "en") is None
+
+
+@pytest.mark.parametrize("item", ["3 years of experience", "3+ yıl deneyim",
+                                  "Master's degree", "Senior level"])
+def test_learning_is_for_skills_not_experience_or_degrees(cat: Catalog, letter: CoverLetter,
+                                                          item: str) -> None:
+    posting = f"Requirements: {item}, Airflow."
+    assert any("only a skill or technology" in v for v in _learning(cat, letter, posting, item))
+    assert _learning(cat, letter, posting, "Airflow") == set()

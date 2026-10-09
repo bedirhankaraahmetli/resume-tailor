@@ -243,6 +243,12 @@ LETTER_MAX_WORDS = 400
 
 
 LETTER_MAX_LEARNING = 3
+# "Learning" names a skill or technology. Years of experience, degrees and seniority are
+# requirements nobody can learn quickly; "I have not worked with 3 years of experience"
+# would be nonsense, so such items are rejected and stay unmentioned.
+_NOT_A_SKILL = re.compile(
+    r"\b(experience|years?|degree|bachelor|master|phd|senior|seniority|deneyim|tecrübe|"
+    r"yıl|lisans|yüksek lisans|doktora|kıdem)\w*", re.IGNORECASE)
 
 
 def check_letter(cat: Catalog, letter: CoverLetter, langs: tuple[str, ...],
@@ -266,8 +272,12 @@ def check_letter(cat: Catalog, letter: CoverLetter, langs: tuple[str, ...],
         if not item.en.strip() or not item.tr.strip():
             v.append(Violation("learning", where, "needs both 'en' and 'tr'"))
             continue
-        if len(item.en) > 40 or len(item.tr) > 40 or _CONTACT.search(item.en + " " + item.tr):
+        both = f"{item.en} {item.tr}"
+        if len(item.en) > 40 or len(item.tr) > 40 or _CONTACT.search(both):
             v.append(Violation("learning", where, "a short name only, not a sentence"))
+        if extract_numbers(both) or _NOT_A_SKILL.search(both):
+            v.append(Violation("learning", where, "only a skill or technology to learn; "
+                               "leave years of experience, degrees and seniority out"))
         if posting_folded is not None and not (contains_term(posting_folded, item.en)
                                                or contains_term(posting_folded, item.tr)):
             v.append(Violation("learning", where, "is not in the posting; list only what "

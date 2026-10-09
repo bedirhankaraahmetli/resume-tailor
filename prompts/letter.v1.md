@@ -29,8 +29,10 @@ them, and never write a name, an email, a phone number or a link.
    and never hint at having it. Put up to 3 of the most important ones in `learning`
    instead: short names as the posting writes them, with a Turkish name (technology
    names stay as they are). The tool adds one sentence saying the candidate has not
-   worked with them yet and is keen to learn them. Never list something the candidate
-   has. Leave `learning` empty if nothing important is missing.
+   worked with them yet and is keen to learn them. Only skills and technologies belong
+   there: never years of experience, a degree or a seniority level, and never mention
+   those gaps anywhere else either. Never list something the candidate has. Leave
+   `learning` empty if nothing important is missing.
 
 # Shape
 
