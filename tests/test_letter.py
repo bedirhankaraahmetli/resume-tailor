@@ -10,7 +10,13 @@ import pytest
 from resume_tailor.catalog import Catalog, build_catalog
 from resume_tailor.config import load_config
 from resume_tailor.guard import check_letter
-from resume_tailor.letter import learning_sentence, letter_date, preamble, render_letter
+from resume_tailor.letter import (
+    clean_text,
+    learning_sentence,
+    letter_date,
+    preamble,
+    render_letter,
+)
 from resume_tailor.models import ApplicationRequest, CoverLetter, LearningItem, letter_languages
 
 
@@ -142,3 +148,22 @@ def test_learning_is_for_skills_not_experience_or_degrees(cat: Catalog, letter: 
     posting = f"Requirements: {item}, Airflow."
     assert any("only a skill or technology" in v for v in _learning(cat, letter, posting, item))
     assert _learning(cat, letter, posting, "Airflow") == set()
+
+
+@pytest.mark.parametrize(("raw", "clean"), [
+    # Seen in a real Turkish letter (2026-10-09).
+    ("geliştirmeye istekliyim.pparagraph", "geliştirmeye istekliyim."),
+    ("istekliyim. paragraph", "istekliyim."),
+    ("First line.\\n Second", "First line. Second"),
+    ("One<br/>two", "One two"),
+    # Real words and names are left alone.
+    ("Node.js, pdf.js and .NET; B.Sc. in 2025.", "Node.js, pdf.js and .NET; B.Sc. in 2025."),
+])
+def test_formatting_debris_is_removed(raw: str, clean: str) -> None:
+    assert clean_text(raw) == clean
+
+
+def test_debris_the_cleanup_misses_is_a_violation(cat: Catalog, letter: CoverLetter) -> None:
+    p = letter.paragraphs[0]
+    letter.paragraphs[0] = p.model_copy(update={"tr": (p.tr or "") + " \\textbf{x}"})
+    assert "debris" in _codes(cat, letter)

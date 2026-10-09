@@ -8,6 +8,7 @@ read from `resume.tex` and the letter is compiled as a separate `letter.tex`.
 
 from __future__ import annotations
 
+import re
 import shutil
 from datetime import date
 from pathlib import Path
@@ -23,6 +24,30 @@ EN_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "Au
 
 class LetterError(RuntimeError):
     pass
+
+
+# Formatting debris a model sometimes leaves in plain text: a paragraph marker glued to
+# the end of a sentence ("istekliyim.pparagraph", seen in a real Turkish letter on
+# 2026-10-09), a literal "\n" or "\par", or an HTML line break. Never content.
+_DEBRIS = [
+    (re.compile(r"(?<=[.!?:;])\s*\\?p*aragraphs?\b", re.IGNORECASE), ""),
+    (re.compile(r"\\(?:n|par|newline|linebreak)\b|<br\s*/?>", re.IGNORECASE), " "),
+]
+
+
+def clean_text(text: str) -> str:
+    for pattern, repl in _DEBRIS:
+        text = pattern.sub(repl, text)
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
+def clean_letter(letter: CoverLetter) -> CoverLetter:
+    """The letter with formatting debris removed from every paragraph. Runs before the
+    fact guard, so a stray marker costs no repair round."""
+    return letter.model_copy(update={"paragraphs": [
+        p.model_copy(update={"en": clean_text(p.en) if p.en else p.en,
+                             "tr": clean_text(p.tr) if p.tr else p.tr})
+        for p in letter.paragraphs]})
 
 
 def letter_date(d: date, lang: str) -> str:

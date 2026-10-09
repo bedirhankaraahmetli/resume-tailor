@@ -240,6 +240,9 @@ def check(cat: Catalog, t: Tailoring) -> GuardResult:
 # Plain words only: the letter's links and contact details come from the base heading.
 _CONTACT = re.compile(r"https?://|www\.|\S+@\S+\.\w+")
 LETTER_MAX_WORDS = 400
+# Markup or a paragraph marker left in plain text, after letter.clean_letter has run.
+_DEBRIS_LEFT = re.compile(r"\\[A-Za-z]+|<\/?[a-z]+\s*\/?>|\S(?:p?paragraph)\b",
+                          re.IGNORECASE)
 
 
 LETTER_MAX_LEARNING = 3
@@ -308,6 +311,10 @@ def check_letter(cat: Catalog, letter: CoverLetter, langs: tuple[str, ...],
             if _CONTACT.search(text):
                 v.append(Violation("contact", f"{where} ({lang})", "no links, emails or "
                                    "contact details; the letterhead has them"))
+            debris = _DEBRIS_LEFT.search(text)
+            if debris:
+                v.append(Violation("debris", f"{where} ({lang})", f"remove the stray "
+                                   f"'{debris.group().strip()}'; the text is plain prose"))
     for lang, n in words.items():
         if n > LETTER_MAX_WORDS:
             v.append(Violation("length", f"letter ({lang})", f"{n} words; keep it under "

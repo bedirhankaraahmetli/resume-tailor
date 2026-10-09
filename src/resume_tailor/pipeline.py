@@ -23,7 +23,7 @@ from .config import Config, Preset, load_config
 from .fit import fit
 from .guard import GuardResult, check, check_letter
 from .ledger import Ledger, append_application, now_utc, update_application
-from .letter import prepare_letter, render_letter
+from .letter import clean_letter, prepare_letter, render_letter
 from .llm_input import PROMPT_VERSION, analyze_call, letter_call, repair_prompt, tailor_call
 from .models import Analysis, CoverLetter, RunResult, Tailoring
 from .naming import folder_name, letter_names, pdf_names, unique_folder
@@ -267,8 +267,8 @@ def _letter(data_dir: Path, cat: Catalog, req: RunRequest, router: Router, state
     try:
         if req.dry_run:
             d = req.fixture_dir or data_dir / "fixtures"
-            letter = CoverLetter.model_validate_json(
-                (d / "letter.json").read_text(encoding="utf-8"))
+            letter = clean_letter(CoverLetter.model_validate_json(
+                (d / "letter.json").read_text(encoding="utf-8")))
             g = check_letter(cat, letter, langs, req.posting)
         else:
             assert req.posting is not None
@@ -276,6 +276,7 @@ def _letter(data_dir: Path, cat: Catalog, req: RunRequest, router: Router, state
                                tailoring=state.tailoring, note=req.note, langs=langs,
                                model=req.model)
             letter, resp, provider = router.run(call, CoverLetter.model_validate_json)
+            letter = clean_letter(letter)
             g = check_letter(cat, letter, langs, req.posting)
             state.letter_attempts.append(_attempt(letter, g))
             if not g.ok:
@@ -289,6 +290,7 @@ def _letter(data_dir: Path, cat: Catalog, req: RunRequest, router: Router, state
                                  repair_prompt(call.user, resp.text, errors),
                                  CoverLetter, call.model_override)
                 letter, _ = router.call_on(provider, repair, CoverLetter.model_validate_json)
+                letter = clean_letter(letter)
                 g = check_letter(cat, letter, langs, req.posting)
                 state.letter_attempts.append(_attempt(letter, g))
     except Exception as e:  # never lose the resumes over the optional letter
