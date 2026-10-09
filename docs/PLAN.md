@@ -170,6 +170,50 @@ deployed site):
 preview started in a background tab finishes when the tab is shown. This is harmless for
 users, but it made headless tests hang until the tab was brought to the front.
 
+**Owner's test (2026-10-09): accepted on Windows and iPhone.** The test led to these
+changes:
+- Keyword matching:
+  - It ignores generic words but keeps the rest of a term as a phrase.
+  - It counts either PDF, and maps Turkish terms back through `skill_names_tr`.
+  - The must-have warning checks the English PDF only.
+- The share sheet sends the report as `.txt`. `.md` made the whole share fail with
+  "Permission denied".
+- Base resume PDFs are in Quick apply (`base-pdf/`, `tailor base build`).
+- The theme is light blue.
+- Owner-approved inventory edits: new skills, a Soft Skills row on both base resumes,
+  and a tighter Turkish SHAP bullet so the row fits.
+
+### Phase 4 backlog (owner, 2026-10-09)
+
+From PROMPT.md §12:
+- an optional cover letter;
+- status editing in History;
+- "regenerate with a note".
+
+Added by the owner:
+- **Skills editor in the web app (Settings → Skills).**
+  - **Input:** the skill (Title Case), its Turkish name, and an evidence note.
+  - **One commit** updates both files:
+    - a row in `career-inventory.md` §6;
+    - a `skill_names_tr` line in `config.yml`.
+  - **Writes:** through the Contents API with each file's `sha`, retrying on 409, like
+    `appendApplication`.
+  - **Checks first:**
+    - a near-duplicate (case-insensitive, or one name containing the other, e.g.
+      "Data Analysis" vs "Data Visualization");
+    - an empty Turkish name;
+    - a name that is on the "never claim" list.
+  - **Says what happens next:** presets go outdated, and the base resume does not
+    change.
+  - **Editing YAML in the browser:** do not add a YAML library. Insert the line after
+    the last `skill_names_tr:` entry, and test against the real file's shape.
+  - **Pending:** the owner has three skills to add: Data Analysis, Documentation and
+    Willingness to Learn.
+
+Declined by the owner:
+- LinkedIn link import and a bookmarklet. Postings stay pasted.
+- Opting Crumble (4.7) into resumes.
+
 ---
 
 ## 1. Scope (restated)
