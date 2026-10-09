@@ -253,3 +253,7 @@ ol.progress li.current .mark { animation: pulse 1.4s ease-in-out infinite; }
   .pdf-grid { grid-template-columns: 1fr 1fr; }
   form > button.primary { width: auto; }
 }
+
+/* History: the status picker sits where the badge was; width:100% would push it a line down. */
+.status-edit { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.status-edit select { width: auto; padding: 6px 10px; }

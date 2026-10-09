@@ -186,8 +186,15 @@ changes:
 ### Phase 4 backlog (owner, 2026-10-09)
 
 From PROMPT.md §12:
-- an optional cover letter;
-- status editing in History;
+- an optional cover letter. **The owner (2026-10-09): choose English, Turkish or both**
+  when ticking it, so a one-language letter costs one language's output tokens;
+- status editing in History. **Built (2026-10-09):** a picker on each card (applied /
+  interview / offer / rejected; an unknown existing value is kept as an option).
+  `csv.setField` rewrites only that record's bytes, finds the row by its full content
+  (preferring its old position, so a row the workflow appended cannot misdirect it),
+  and the write uses the file's `sha` with the same 409 retry as `appendApplication`.
+  Checked in memory on every row of the real `applications.csv`: one line changes,
+  every other row is unchanged;
 - "regenerate with a note".
 
 Added by the owner:

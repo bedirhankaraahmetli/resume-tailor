@@ -1,8 +1,8 @@
 // History: applications.csv, newest first, each row linking to its files.
 
-import { parseRecords } from "../csv";
-import { clear, h, notice } from "../dom";
-import type { GitHub } from "../github";
+import { parseRecords, setField } from "../csv";
+import { clear, errorText, h, notice } from "../dom";
+import { GitHubError, type GitHub } from "../github";
 import type { View } from "../types";
 
 /** The repo folder holding a row's files. Preset-based rows point at the preset. */
@@ -18,7 +18,9 @@ export async function showHistory(view: View, gh: GitHub): Promise<void> {
   clear(view.el, h("h1", null, "History"), notice("info", "Loading…"));
   const csv = await gh.getText("applications.csv");
   if (!view.alive()) return;
-  const rows = csv ? parseRecords(csv.text).reverse() : [];
+  // Each row keeps its position in the file, which the status editor needs.
+  const rows = csv ? parseRecords(csv.text).map((r, i): Record<string, string> => ({ ...r, __i: String(i) })).reverse()
+    : [];
   if (!rows.length) {
     clear(view.el, h("h1", null, "History"), notice("info", "No applications yet."));
     return;
@@ -35,7 +37,7 @@ export async function showHistory(view: View, gh: GitHub): Promise<void> {
           folder
             ? h("a", { href: `#/folder/${encodeURIComponent(folder)}` }, title)
             : h("strong", null, title),
-          h("span", { class: "badge muted" }, r.status || "–")),
+          statusPicker(gh, r)),
         h("p", { class: "muted small" }, [
           r.date,
           r.match_pct ? `match ${r.match_pct}%` : null,
@@ -44,4 +46,47 @@ export async function showHistory(view: View, gh: GitHub): Promise<void> {
             : r.source?.startsWith("preset:") ? `preset ${r.source.slice(7)}` : r.provider,
         ].filter(Boolean).join(" · ")));
     })));
+}
+
+export const STATUSES = ["applied", "interview", "offer", "rejected"] as const;
+
+/** Changes one row's status and commits applications.csv, retrying on a conflict (§2.10). */
+function statusPicker(gh: GitHub, row: Record<string, string>): HTMLElement {
+  const { __i, ...original } = row;
+  const current = original.status ?? "";
+  const options = STATUSES.includes(current as (typeof STATUSES)[number]) || !current
+    ? [...STATUSES] : [current, ...STATUSES];
+  const select = h("select", { class: "status", "aria-label":
+    `Status of ${original.company || "this application"}` },
+    options.map((s) => h("option", { value: s, selected: s === current }, s)));
+  const out = h("span", { class: "small", role: "status" });
+  let saved = current;
+  select.addEventListener("change", () => {
+    const value = select.value;
+    select.disabled = true;
+    out.textContent = "Saving…";
+    (async () => {
+      for (let attempt = 1; ; attempt++) {
+        const csv = await gh.getText("applications.csv");
+        if (!csv) throw new Error("applications.csv is missing.");
+        try {
+          await gh.putText("applications.csv",
+            setField(csv.text, Number(__i), { ...original, status: saved }, "status", value),
+            `status: ${original.company} - ${original.position} → ${value}`, csv.sha);
+          return;
+        } catch (e) {
+          const conflict = e instanceof GitHubError && (e.status === 409 || e.status === 422);
+          if (!conflict || attempt >= 4) throw e;
+          await new Promise((r) => setTimeout(r, 800 * attempt));
+        }
+      }
+    })().then(() => {
+      saved = value;
+      out.textContent = "✓ Saved";
+    }).catch((e: unknown) => {
+      select.value = saved;
+      out.textContent = `Not saved: ${errorText(e)}`;
+    }).finally(() => { select.disabled = false; });
+  });
+  return h("span", { class: "status-edit" }, select, out);
 }

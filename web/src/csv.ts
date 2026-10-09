@@ -74,3 +74,46 @@ export function appendRecord(text: string, record: Record<string, string>): stri
   }
   return out + header.map((h) => field(record[h] ?? "")).join(",") + eol;
 }
+
+/** Where each record (header included) starts and ends in the text, line break excluded. */
+function recordSpans(text: string): [number, number][] {
+  const spans: [number, number][] = [];
+  let start = 0;
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') quoted = !quoted;
+    else if (!quoted && (c === "\n" || c === "\r")) {
+      spans.push([start, i]);
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      start = i + 1;
+    }
+  }
+  if (start < text.length) spans.push([start, text.length]);
+  return spans;
+}
+
+/**
+ * Sets one field of one record and leaves every other byte alone. The record is found by
+ * its full content, preferring `index` (its position among the data rows), so a row the
+ * workflow appended in the meantime cannot make us edit the wrong one.
+ */
+export function setField(text: string, index: number, original: Record<string, string>,
+                         name: string, value: string): string {
+  const src = text.replace(/^﻿/, "");
+  const bom = text.length - src.length;
+  const spans = recordSpans(src);
+  const rows = parseCsv(src);
+  const header = rows[0] ?? [];
+  const col = header.indexOf(name);
+  if (col < 0) throw new Error(`applications.csv has no “${name}” column.`);
+  const same = (r: string[] | undefined): boolean =>
+    !!r && header.every((h, i) => (r[i] ?? "") === (original[h] ?? ""));
+  let at = same(rows[index + 1]) ? index + 1 : -1;
+  if (at < 0) at = rows.findIndex((r, i) => i > 0 && same(r));
+  if (at < 0) throw new Error("That application changed in the meantime. Reload History.");
+  const cells = header.map((_, i) => rows[at]![i] ?? "");
+  cells[col] = value;
+  const [a, b] = spans[at]!;
+  return text.slice(0, bom + a) + cells.map(field).join(",") + text.slice(bom + b);
+}
