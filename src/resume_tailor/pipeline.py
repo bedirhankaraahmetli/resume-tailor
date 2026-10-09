@@ -347,7 +347,8 @@ def _compile(data_dir: Path, config: Config, req: RunRequest, router: Router,
             # difference ("oyun geliştirme"), not missing content, and the posting analysis
             # rarely supplies the Turkish form to match it against.
             must = keywords.must_have_with_evidence if keywords and lang == "en" else None
-            ats = ats_check(info[lang].text, names=config.owner.names,
+            ev = keywords.must_evidence if keywords and lang == "en" else None
+            ats = ats_check(info[lang].text, names=config.owner.names, evidence=ev,
                             email=config.owner.email, lang=lang, must_have=must)
             if ats.errors:
                 raise RunFailed("ATS check failed: " + "; ".join(ats.errors))

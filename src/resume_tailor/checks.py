@@ -65,9 +65,12 @@ class AtsResult:
 
 
 def ats_check(text: str, *, names: list[str], email: str, lang: str,
-              must_have: list[list[str]] | None = None) -> AtsResult:
+              must_have: list[list[str]] | None = None,
+              evidence: list[str] | None = None) -> AtsResult:
     """`must_have`: for each must-have keyword the owner has evidence for, its accepted
-    forms (term + synonyms, so the Turkish PDF may use the Turkish form)."""
+    forms (term + synonyms, so the Turkish PDF may use the Turkish form). `evidence`,
+    aligned with it, names the form the inventory actually backs, which can be a
+    synonym: a posting's "Jenkins" with the synonym "CI/CD" is backed by CI/CD only."""
     r = AtsResult()
     lig = sorted({f"U+{ord(c):04X}" for c in text if 0xFB00 <= ord(c) <= 0xFB06})
     if lig:
@@ -80,10 +83,18 @@ def ats_check(text: str, *, names: list[str], email: str, lang: str,
         r.errors.append(f"{lang}: owner name not found in PDF text")
     if fold(email) not in ft.replace(" ", ""):
         r.errors.append(f"{lang}: email not found in PDF text")
-    for forms in must_have or []:
-        if forms and not any(on_page(ft, fs, f) for f in forms):
-            r.warnings.append(f"{lang}: must-have keyword '{forms[0]}' (you have evidence) "
-                              "is not in the PDF")
+    for i, forms in enumerate(must_have or []):
+        # The same rule as the match %: "iOS" on the page covers "iOS development".
+        if not forms or any(on_page(ft, fs, f) or soft_match(ft, f) for f in forms):
+            continue
+        backed = (evidence[i] if evidence and i < len(evidence) else "") or forms[0]
+        if fold(backed) == fold(forms[0]):
+            r.warnings.append(f"{lang}: must-have keyword '{forms[0]}' is in your inventory "
+                              "but not in the PDF")
+        else:
+            r.warnings.append(f"{lang}: must-have keyword '{forms[0]}' is not in the PDF, and "
+                              f"neither is '{backed}', which your inventory has and which "
+                              f"counts for it. You do not have '{forms[0]}' itself")
     return r
 
 
@@ -93,6 +104,8 @@ class KeywordReport:
     missing_with_evidence: list[str]
     gaps: list[str]
     must_have_with_evidence: list[list[str]]  # accepted forms per keyword
+    # The form the inventory backs, per must-have keyword (aligned with the list above).
+    must_evidence: list[str] = field(default_factory=list)
 
     @property
     def match_pct(self) -> int | None:
@@ -120,6 +133,7 @@ def keyword_report(analysis: Analysis, en_text: str, evidence: str | list[str], 
     missing: list[str] = []
     gaps: list[str] = []
     must: list[list[str]] = []
+    must_ev: list[str] = []
     for kw in analysis.keywords:
         forms = [kw.term, *kw.synonyms]
         forms += [back[fold(f)] for f in forms if fold(f) in back and back[fold(f)] not in forms]
@@ -132,4 +146,6 @@ def keyword_report(analysis: Analysis, en_text: str, evidence: str | list[str], 
             continue
         if kw.importance == "must":
             must.append(forms)
-    return KeywordReport(present, missing, gaps, must)
+            must_ev.append(next((f for f in forms if any(soft_match(c, f) for c in chunks)),
+                                forms[0]))
+    return KeywordReport(present, missing, gaps, must, must_ev)

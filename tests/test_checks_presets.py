@@ -116,3 +116,25 @@ def test_editing_one_preset_does_not_stale_others(sample_dir: Path) -> None:
         "Backend roles:", "Backend and API roles:"), encoding="utf-8")
     fresh = load_presets(sample_dir).presets
     assert [status(sample_dir, p) for p in fresh] == ["up to date", "up to date", "outdated"]
+
+
+def test_must_have_uses_the_match_rule_and_names_the_backed_form() -> None:
+    who = dict(lang="en", names=["Deniz Yılmaz"], email="d@example.com")
+    page = "Deniz Yılmaz d@example.com Built an iOS app in Swift"
+    # "iOS" on the page covers "iOS development", as it does in the match %.
+    assert ats_check(page, must_have=[["iOS development", "iOS SDK"]], **who).warnings == []
+    # The posting's "Jenkins" came with the synonym "CI/CD", which is what the inventory has.
+    [w] = ats_check(page, must_have=[["Jenkins", "CI/CD"]], evidence=["CI/CD"], **who).warnings
+    assert "'Jenkins' is not in the PDF" in w and "neither is 'CI/CD'" in w
+    [w] = ats_check(page, must_have=[["Docker"]], evidence=["Docker"], **who).warnings
+    assert w == "en: must-have keyword 'Docker' is in your inventory but not in the PDF"
+
+
+def test_keyword_report_records_which_form_is_backed() -> None:
+    from resume_tailor.models import Analysis, Keyword
+
+    a = Analysis(company=None, position="x", posting_language="en", seniority="unspecified",
+                 must_have=[], nice_to_have=[],
+                 keywords=[Keyword(term="Jenkins", synonyms=["CI/CD"], importance="must")])
+    k = keyword_report(a, "", "GitHub Actions (CI/CD)")
+    assert k.must_have_with_evidence == [["Jenkins", "CI/CD"]] and k.must_evidence == ["CI/CD"]
