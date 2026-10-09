@@ -33,8 +33,8 @@ flowchart LR
     cli["CLI"]
   end
   subgraph data["resume-data (private repo)"]
-    req["requests/&lt;id&gt;.json"]
-    out["applications/&lt;Company - Position&gt;/<br/>PDFs, match report<br/>results/&lt;id&gt;.json, applications.csv"]
+    req["requests/{id}.json"]
+    out["applications/Company - Position/<br/>PDFs, match report<br/>results/{id}.json, applications.csv"]
   end
   subgraph tool["resume-tailor (this repo)"]
     wf["Reusable workflow"]
