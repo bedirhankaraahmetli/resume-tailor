@@ -72,3 +72,35 @@ class Ledger:
 
 def append_application(data_dir: Path, row: dict[str, object]) -> None:
     _append(data_dir / "applications.csv", APP_FIELDS, row)
+
+
+def update_application(data_dir: Path, request_id: str, *, provider: str, model: str,
+                       added_cost: float, match_pct: str, request_id_new: str) -> bool:
+    """A regenerate updates its application's row instead of adding a second one.
+
+    The status the owner set stays; the cost becomes the total spent on that application.
+    `request_id` moves to the new run, so the row can be regenerated again. Returns False
+    when no row has that request id (the caller then appends one).
+    """
+    path = data_dir / "applications.csv"
+    if not path.exists():
+        return False
+    with path.open(encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        fields = list(reader.fieldnames or APP_FIELDS)
+        rows = list(reader)
+    hits = [r for r in rows if r.get("request_id") == request_id]
+    if not hits:
+        return False
+    row = hits[-1]
+    try:
+        before = float(row.get("cost_usd") or 0)
+    except ValueError:
+        before = 0.0
+    row.update(provider=provider, model=model, cost_usd=f"{before + added_cost:.4f}",
+               match_pct=match_pct, request_id=request_id_new)
+    with path.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+    return True

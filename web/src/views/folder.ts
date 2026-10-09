@@ -1,15 +1,19 @@
 // Shows one output folder of the data repo: both PDFs (preview, download, share, save to
 // folder) and the match report. Used for a finished run, a History row and a preset.
 
+import { parseRecords } from "../csv";
 import { busy, clear, errorText, h, money, notice } from "../dom";
 import type { GitHub } from "../github";
+import { requestId } from "../ids";
 import { renderMarkdown } from "../markdown";
 import { renderFirstPage } from "../pdf";
 import {
   canSaveToFolder, canShareFiles, chooseFolder, download, saveToFolder, savedFolderName, share,
   type OutFile,
 } from "../save";
-import type { RunResult, View } from "../types";
+import { submit } from "../requests";
+import type { ApplicationRequest, RunResult, View } from "../types";
+import { PROVIDERS } from "./new";
 
 interface Located {
   en?: string;
@@ -106,6 +110,8 @@ export async function showFolder(view: View, gh: GitHub, folder: string,
       .catch((e: unknown) => clear(frame, notice("warn", `Preview unavailable: ${errorText(e)}`)));
   }
 
+  if (folder.startsWith("applications/")) view.el.append(regenerateCard(gh, folder, result));
+
   if (result) {
     const n = noticesList(result.notices);
     if (n) view.el.append(n);
@@ -152,4 +158,72 @@ function actions(folder: string, files: OutFile[], title: string): HTMLElement {
     row.append(all);
   }
   return h("div", null, row, out);
+}
+
+/**
+ * The request id that last built this application folder. History's row is the source:
+ * a regenerate moves its `request_id` to the new run, so an old run's result could be stale.
+ */
+async function latestRequest(gh: GitHub, folder: string, result?: RunResult):
+    Promise<string | null> {
+  const csv = await gh.getText("applications.csv");
+  const name = basename(folder);
+  const rows = csv ? parseRecords(csv.text).filter((r) => r.folder === name && r.request_id)
+    : [];
+  return rows.at(-1)?.request_id ?? (result?.kind === "application" ? result.id : null);
+}
+
+function regenerateCard(gh: GitHub, folder: string, result?: RunResult): HTMLElement {
+  const note = h("textarea", { id: "regen-note", rows: 3, required: true,
+    placeholder: "e.g. lead with the iOS projects; drop the game projects" });
+  const provider = h("select", { id: "regen-provider" },
+    PROVIDERS.map(([v, l]) => h("option", { value: v }, l)));
+  const out = h("div");
+  const go = h("button", { class: "primary", type: "submit" }, "Regenerate");
+  let previous: string | null = null;
+
+  const form = h("form", { class: "stack" },
+    h("p", { class: "hint" }, "Tailors this application again with your note: one "
+      + "tailoring call (about $0.05–0.10), because the posting analysis is reused. The "
+      + "new PDFs replace these files, and History keeps one row with its status."),
+    h("div", { class: "field" }, h("label", { for: note.id }, "Note for the tailoring"), note),
+    h("div", { class: "field" }, h("label", { for: provider.id }, "Provider"), provider),
+    go, out);
+  const card = h("details", { class: "card" },
+    h("summary", null, "Regenerate with a note"), form);
+
+  // Loaded when opened, so viewing a folder costs no extra API requests.
+  card.addEventListener("toggle", () => {
+    if (!card.open || previous) return;
+    void latestRequest(gh, folder, result).then(async (id) => {
+      previous = id;
+      if (!id) {
+        clear(out, notice("warn", "This folder has no request id in History, so it cannot "
+          + "be regenerated. Start a new application instead."));
+        go.disabled = true;
+        return;
+      }
+      const req = await gh.getJson<Partial<ApplicationRequest>>(`requests/${id}.json`);
+      if (!note.value && req?.note) note.value = req.note;
+    }).catch((e: unknown) => clear(out, notice("error", errorText(e))));
+  });
+
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    busy(go, out, async () => {
+      const text = note.value.trim();
+      if (!text) throw new Error("Write what should change.");
+      const id = previous ?? await latestRequest(gh, folder, result);
+      if (!id) throw new Error("This folder cannot be regenerated: no request id in History.");
+      const label = basename(folder);
+      const req: ApplicationRequest = {
+        schema_version: 1, type: "application", id: requestId(label), posting: null,
+        company: null, position: null, provider: provider.value || null, model: null,
+        note: text, cover_letter: false, regenerates: id,
+      };
+      await submit(gh, req, `regenerate ${label}`);
+      location.hash = `#/run/${req.id}`;
+    })();
+  });
+  return card;
 }

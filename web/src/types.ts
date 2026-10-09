@@ -20,13 +20,16 @@ export interface ApplicationRequest {
   schema_version: 1;
   type: "application";
   id: string;
-  posting: { text: string };
+  /** Null for a regenerate, which reuses the earlier run's posting. */
+  posting: { text: string } | null;
   company: string | null;
   position: string | null;
   provider: string | null;
   model: string | null;
   note: string | null;
   cover_letter: boolean;
+  /** The request id of the application this run rebuilds in place. */
+  regenerates: string | null;
 }
 
 export interface PresetRequest {

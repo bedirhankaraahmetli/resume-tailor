@@ -30,12 +30,15 @@ from .llm_input import repair_prompt
 from .models import Analysis, ApplicationRequest, PresetRequest, RunResult, Tailoring
 from .pipeline import (
     STAGES,
+    Previous,
+    RunFailed,
     RunRequest,
     RunState,
     Stage,
     default_providers,
     describe,
     finish_result,
+    load_previous,
     run_stage,
     write_result,
 )
@@ -64,6 +67,10 @@ class Job(BaseModel):
     provider: str | None = None
     model: str | None = None
     note: str | None = None
+    # A regenerate: the earlier run, read once at `start` and carried from step to step.
+    regenerates: str | None = None
+    previous_folder: str | None = None
+    previous_analysis: Analysis | None = None
     stage_done: str | None = None
     failed: bool = False
     result: RunResult
@@ -158,6 +165,21 @@ def jobs_for(data_dir: Path, path: Path) -> list[Job]:
         if areq.cover_letter:
             notices.append("Cover letters are not built yet (Phase 4); only the resumes "
                            "were made.")
+        if areq.regenerates is not None:
+            # Checked now, so a bad id fails before anything is spent.
+            if not ID_RE.match(areq.regenerates):
+                return [_failed(rid, rel, kind, "regenerates must be a request id")]
+            try:
+                prev = load_previous(data_dir, areq.regenerates)
+            except RunFailed as e:
+                return [_failed(rid, rel, kind, str(e))]
+            # Company and position come from the earlier run, so the folder stays the same.
+            return [Job(request_id=rid, run_id=rid, request_path=rel, posting=prev.posting,
+                        provider=areq.provider, model=areq.model, note=areq.note,
+                        regenerates=areq.regenerates, previous_folder=prev.folder,
+                        previous_analysis=prev.analysis, notices=notices,
+                        result=RunResult(id=rid, status="failed", kind="application"))]
+        assert areq.posting is not None  # the model requires it without `regenerates`
         return [Job(request_id=rid, run_id=rid, request_path=rel, posting=areq.posting.text,
                     company=areq.company, position=areq.position, provider=areq.provider,
                     model=areq.model, note=areq.note, notices=notices,
@@ -222,7 +244,16 @@ def _request(data_dir: Path, job: Job) -> RunRequest:
         preset = next(p for p in load_presets(data_dir).presets if p.id == job.preset_id)
     return RunRequest(kind="preset" if preset else "application", request_id=job.run_id,
                       posting=job.posting, company=job.company, position=job.position,
-                      provider=job.provider, model=job.model, note=job.note, preset=preset)
+                      provider=job.provider, model=job.model, note=job.note, preset=preset,
+                      previous=_previous(job))
+
+
+def _previous(job: Job) -> Previous | None:
+    if not job.regenerates:
+        return None
+    assert job.previous_folder and job.previous_analysis and job.posting is not None
+    return Previous(request_id=job.regenerates, folder=job.previous_folder,
+                    posting=job.posting, analysis=job.previous_analysis)
 
 
 def _prefixed(log: Callable[[str], None], label: str) -> Callable[[str], None]:

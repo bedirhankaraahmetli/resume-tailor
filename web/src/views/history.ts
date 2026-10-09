@@ -48,7 +48,8 @@ export async function showHistory(view: View, gh: GitHub): Promise<void> {
     })));
 }
 
-export const STATUSES = ["applied", "interview", "offer", "rejected"] as const;
+// "generated" is what the workflow writes for a tailored run nobody has applied with yet.
+export const STATUSES = ["generated", "applied", "interview", "offer", "rejected"] as const;
 
 /** Changes one row's status and commits applications.csv, retrying on a conflict (§2.10). */
 function statusPicker(gh: GitHub, row: Record<string, string>): HTMLElement {

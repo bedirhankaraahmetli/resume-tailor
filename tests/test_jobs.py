@@ -192,6 +192,63 @@ def test_guard_failure_stops_later_stages_for_that_request_only(sample_dir: Path
 
 
 @needs_tex
+def test_regenerate_replaces_the_folder_and_updates_the_row(sample_dir: Path,
+                                                            tmp_path: Path) -> None:
+    first = "20261009-120000-northwind"
+    _app(sample_dir, first)
+    work = tmp_path / "work"
+    start(sample_dir, work)
+    _all_stages(sample_dir, work, Canned(sample_dir))
+    [res1] = finish(sample_dir, work)
+    assert res1.status == "done", res1.error
+    # The owner moved it along in History before regenerating.
+    path = sample_dir / "applications.csv"
+    path.write_text(path.read_text("utf-8").replace("generated", "interview"), "utf-8")
+    (sample_dir / res1.files["en"]).write_bytes(b"old")  # to see it replaced
+
+    second = "20261009-130000-northwind"
+    _write(sample_dir, f"{second}.json", {"schema_version": 1, "type": "application",
+           "id": second, "note": "lead with the churn project", "regenerates": first})
+    canned = Canned(sample_dir)
+    q = start(sample_dir, work)
+    assert [j.regenerates for j in q.jobs] == [first]
+    assert _all_stages(sample_dir, work, canned) == [True, True, True]
+    assert canned.calls == ["tailor"]  # the earlier analysis is reused
+    [res2] = finish(sample_dir, work)
+    assert res2.status == "done", res2.error
+    assert res2.folder == res1.folder and res2.files == res1.files
+    assert (sample_dir / res2.files["en"]).read_bytes() != b"old"
+    assert any("Regenerated" in n for n in res2.notices)
+    assert len(list((sample_dir / "applications").iterdir())) == 1
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    assert len(rows) == 1
+    assert rows[0]["status"] == "interview" and rows[0]["request_id"] == second
+    assert rows[0]["cost_usd"] == "0.0300"  # 0.02 for the first run, 0.01 for this one
+
+
+@pytest.mark.parametrize(("target", "error"), [
+    ("20261009-000000-nothing", "it has no result"),
+    ("../x", "must be a request id"),
+])
+def test_regenerate_of_an_unknown_run_fails_before_spending(sample_dir: Path, tmp_path: Path,
+                                                           target: str, error: str) -> None:
+    rid = "20261009-130000-x"
+    _write(sample_dir, f"{rid}.json", {"schema_version": 1, "type": "application", "id": rid,
+                                       "note": "n", "regenerates": target})
+    work = tmp_path / "work"
+    q = start(sample_dir, work)
+    assert q.jobs[0].failed
+    [res] = finish(sample_dir, work)
+    assert res.status == "failed" and res.error and error in res.error
+
+
+def test_application_needs_a_posting_or_a_regenerate(sample_dir: Path, tmp_path: Path) -> None:
+    _write(sample_dir, "x-2.json", {"schema_version": 1, "type": "application", "id": "x-2"})
+    start(sample_dir, tmp_path / "work")
+    [res] = finish(sample_dir, tmp_path / "work")
+    assert res.error and "needs a posting" in res.error
+
+
 def test_preset_request_aggregates_one_result(sample_dir: Path, tmp_path: Path) -> None:
     _write(sample_dir, "p-1.json", {"schema_version": 1, "type": "preset", "id": "p-1",
                                     "presets": ["data-science-ml", "backend"]})

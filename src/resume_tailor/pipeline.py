@@ -22,7 +22,7 @@ from .checks import ats_check, keyword_report
 from .config import Config, Preset, load_config
 from .fit import fit
 from .guard import check
-from .ledger import Ledger, append_application, now_utc
+from .ledger import Ledger, append_application, now_utc, update_application
 from .llm_input import PROMPT_VERSION, analyze_call, repair_prompt, tailor_call
 from .models import Analysis, RunResult, Tailoring
 from .naming import folder_name, pdf_names, unique_folder
@@ -43,6 +43,45 @@ Stage = Literal["analyze", "tailor", "compile"]
 
 
 @dataclass
+class Previous:
+    """An earlier application that a regenerate rebuilds in place."""
+
+    request_id: str
+    folder: str  # under applications/
+    posting: str
+    analysis: Analysis
+
+
+def load_previous(data_dir: Path, request_id: str) -> Previous:
+    """The earlier run's folder, posting and analysis, from its result and `_build/`.
+
+    Reusing the analysis skips one LLM call and keeps the company, position and folder
+    exactly as they were, so the regenerate replaces that application instead of adding a
+    second one.
+    """
+    try:
+        prev = RunResult.model_validate_json(
+            (data_dir / "results" / f"{request_id}.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise RunFailed(f"cannot regenerate {request_id}: it has no result") from None
+    if prev.kind != "application" or prev.status != "done" or not prev.folder:
+        raise RunFailed(f"cannot regenerate {request_id}: only a finished application can "
+                        "be regenerated")
+    top, _, folder = prev.folder.partition("/")
+    build = data_dir / "applications" / folder / "_build"
+    if top != "applications" or not folder or "/" in folder or not build.is_dir():
+        raise RunFailed(f"cannot regenerate {request_id}: its folder {prev.folder} is missing")
+    try:
+        posting = (build / "posting.txt").read_text(encoding="utf-8")
+        saved = json.loads((build / "llm-response.json").read_text(encoding="utf-8"))
+        analysis = Analysis.model_validate(saved["analysis"])
+    except (OSError, ValueError, KeyError) as e:
+        raise RunFailed(f"cannot regenerate {request_id}: its saved posting or analysis "
+                        f"is unreadable ({e})") from None
+    return Previous(request_id=request_id, folder=folder, posting=posting, analysis=analysis)
+
+
+@dataclass
 class RunRequest:
     kind: Literal["application", "preset"]
     request_id: str
@@ -53,6 +92,7 @@ class RunRequest:
     model: str | None = None
     note: str | None = None
     preset: Preset | None = None
+    previous: Previous | None = None
     dry_run: bool = False
     fixture_dir: Path | None = None
 
@@ -157,6 +197,9 @@ def _analyze(data_dir: Path, config: Config, req: RunRequest, router: Router,
     if req.kind == "preset":
         assert req.preset is not None
         analysis = preset_analysis(req.preset)
+    elif req.previous is not None:
+        log("reusing the earlier run's posting analysis…")
+        analysis = req.previous.analysis.model_copy(deep=True)
     elif req.dry_run:
         analysis, _ = _load_fixture(req, data_dir)
     else:
@@ -276,14 +319,21 @@ def _write_outputs(data_dir: Path, config: Config, cat: Catalog, req: RunRequest
         dest = data_dir / "presets" / folder
         copy_to = out_dir / "_Presets" / folder if out_dir else None
         title = f"Preset — {folder}"
+    elif req.previous is not None:
+        folder = req.previous.folder
+        dest = data_dir / "applications" / folder
+        copy_to = out_dir / folder if out_dir else None
+        title = f"Match report — {folder}"
     else:
         folder = unique_folder(folder_name(analysis.company, position),
                                data_dir / "applications", *( [out_dir] if out_dir else []))
         dest = data_dir / "applications" / folder
         copy_to = out_dir / folder if out_dir else None
         title = f"Match report — {folder}"
-    if dest.exists() and req.kind == "preset":
+    if dest.exists() and (req.kind == "preset" or req.previous is not None):
+        # A rebuild replaces the folder; the earlier version stays in git history.
         shutil.rmtree(dest)
+    dest.mkdir(parents=True, exist_ok=True)
     build = dest / "_build"
     for lang in ("en", "tr"):
         (build / lang / "src").mkdir(parents=True, exist_ok=True)
@@ -325,12 +375,17 @@ def _write_outputs(data_dir: Path, config: Config, cat: Catalog, req: RunRequest
         provider, model = last.provider, last.model
     else:
         provider, model = "dry-run", "fixture"
-    if req.kind == "application":
+    match = "" if result.match_pct is None else str(result.match_pct)
+    if req.previous is not None and update_application(
+            data_dir, req.previous.request_id, provider=provider, model=model,
+            added_cost=router.total_cost, match_pct=match, request_id_new=req.request_id):
+        result.notices.append(f"Regenerated {folder}: its files were replaced, and its "
+                              "History row was updated (status kept, cost added).")
+    elif req.kind == "application":
         append_application(data_dir, {
             "date": now_utc().strftime("%Y-%m-%d"), "company": analysis.company or "",
             "position": position, "folder": folder, "provider": provider, "model": model,
-            "cost_usd": f"{router.total_cost:.4f}",
-            "match_pct": "" if result.match_pct is None else result.match_pct,
+            "cost_usd": f"{router.total_cost:.4f}", "match_pct": match,
             "status": "generated", "source": "tailored", "request_id": req.request_id,
         })
     if req.kind == "preset":

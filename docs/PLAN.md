@@ -195,7 +195,15 @@ From PROMPT.md §12:
   and the write uses the file's `sha` with the same 409 retry as `appendApplication`.
   Checked in memory on every row of the real `applications.csv`: one line changes,
   every other row is unchanged;
-- "regenerate with a note".
+- "regenerate with a note". **Built (2026-10-09):** the request carries
+  `regenerates: <request id>` and no posting. `load_previous` reads the earlier run's
+  `_build/posting.txt` and saved analysis at `start`, so a bad id fails before anything
+  is spent, and the analyze stage reuses that analysis (one LLM call instead of two). The
+  outputs replace that folder (git keeps the old version), and `update_application`
+  updates its History row (status kept, cost summed, `request_id` moved to the new run so
+  it can be regenerated again). Web: a "Regenerate with a note" card on an application's
+  folder page, prefilled with the earlier note; the request id comes from History's row.
+  CLI: `tailor run --regenerate <id> --note …`.
 
 Added by the owner:
 - **Skills editor in the web app (Settings → Skills).**

@@ -7,7 +7,7 @@ import { pdfText } from "../pdf";
 import { submit } from "../requests";
 import type { ApplicationRequest, View } from "../types";
 
-const PROVIDERS: [string, string][] = [
+export const PROVIDERS: [string, string][] = [
   ["", "Default order (Claude API first)"],
   ["anthropic", "Claude API (prepaid credits)"],
   ["claude-code", "Claude Code (Pro subscription)"],
@@ -80,7 +80,7 @@ export function showNew(view: View, gh: GitHub): void {
         company: company.value.trim() || null,
         position: position.value.trim() || null,
         provider: provider.value || null, model: null,
-        note: note.value.trim() || null, cover_letter: false,
+        note: note.value.trim() || null, cover_letter: false, regenerates: null,
       };
       await submit(gh, req, label ?? "new application");
       location.hash = `#/run/${req.id}`;

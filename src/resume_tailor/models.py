@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # =======================================================================================
 # LLM output: posting analysis (call 1)
@@ -118,13 +118,22 @@ class ApplicationRequest(BaseModel):
     schema_version: Literal[1] = 1
     type: Literal["application"] = "application"
     id: str
-    posting: Posting
+    # A regenerate takes the posting from the earlier run's folder instead.
+    posting: Posting | None = None
     company: str | None = None
     position: str | None = None
     provider: str | None = None
     model: str | None = None
     note: str | None = None
     cover_letter: bool = False
+    # The id of an earlier application whose folder this run rebuilds (with a new note).
+    regenerates: str | None = None
+
+    @model_validator(mode="after")
+    def _posting_or_regenerates(self) -> ApplicationRequest:
+        if self.posting is None and self.regenerates is None:
+            raise ValueError("needs a posting, or the id of the run it regenerates")
+        return self
 
 
 class PresetRequest(BaseModel):
