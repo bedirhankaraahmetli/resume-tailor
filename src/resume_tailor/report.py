@@ -47,7 +47,7 @@ def render_report(cat: Catalog, d: ReportData) -> str:
         pct = k.match_pct
         n_total = len(k.present) + len(k.missing_with_evidence) + len(k.gaps)
         out += [f"## Keyword match: {pct if pct is not None else '–'}% "
-                f"({len(k.present)} of {n_total}, English PDF)", ""]
+                f"({len(k.present)} of {n_total}, on either PDF)", ""]
         out += ["### Present on the page", _bullets(k.present), ""]
         out += ["### You have evidence, but it was left out (space or relevance)",
                 _bullets(k.missing_with_evidence), ""]

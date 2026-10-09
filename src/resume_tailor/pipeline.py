@@ -233,7 +233,10 @@ def _compile(data_dir: Path, config: Config, req: RunRequest, router: Router,
 
         keywords = None
         if req.kind == "application":
-            keywords = keyword_report(analysis, info["en"].text, cat.evidence_chunks())
+            r_cfg = config.resume
+            keywords = keyword_report(
+                analysis, info["en"].text, cat.evidence_chunks(), tr_text=info["tr"].text,
+                tr_names={**r_cfg.skill_names_tr, **r_cfg.course_names_tr})
         # Say what the first answer got wrong: it shows how much the guard is doing.
         warnings = [f"fact guard caught (fixed by the repair round): {x}"
                     for x in state.repaired]

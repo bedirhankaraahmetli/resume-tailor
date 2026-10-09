@@ -59,6 +59,33 @@ def test_soft_match_drops_generic_words_but_keeps_the_phrase() -> None:
     assert not soft_match(fold("software"), "Software development")
 
 
+def _kw(term: str, *synonyms: str) -> Analysis:
+    from resume_tailor.models import Keyword
+
+    return Analysis(company=None, position="x", posting_language="tr", seniority="junior",
+                    must_have=[], nice_to_have=[],
+                    keywords=[Keyword(term=term, synonyms=list(synonyms), importance="must")])
+
+
+def test_a_turkish_only_keyword_counts_on_the_turkish_pdf() -> None:
+    a = _kw("Takım çalışması")  # the model left it untranslated, with no synonyms
+    assert keyword_report(a, "Teamwork", "", tr_text="TAKIM ÇALIŞMASI").present == [
+        "Takım çalışması"]
+    # without the Turkish page it would have been a gap
+    assert keyword_report(a, "Teamwork", "").gaps == ["Takım çalışması"]
+
+
+def test_turkish_forms_map_back_to_english_inventory_names() -> None:
+    names = {"Teamwork": "Takım çalışması", "Object-oriented programming":
+             "Nesne yönelimli programlama"}
+    a = _kw("nesne yönelimli programlama")
+    k = keyword_report(a, "", ["Object-oriented programming (OOP)"], tr_names=names)
+    assert k.missing_with_evidence == ["nesne yönelimli programlama"]
+    # the mapped English name also finds it on the English page
+    k = keyword_report(_kw("takım çalışması"), "Teamwork", "", tr_names=names)
+    assert k.present == ["takım çalışması"]
+
+
 # ---- presets ------------------------------------------------------------------------------
 
 

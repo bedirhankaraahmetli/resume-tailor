@@ -100,21 +100,30 @@ class KeywordReport:
         return round(100 * len(self.present) / total) if total else None
 
 
-def keyword_report(analysis: Analysis, en_text: str,
-                   evidence: str | list[str]) -> KeywordReport:
-    """match % = keywords found in the EN text / all keywords (PROMPT.md §5.7).
+def keyword_report(analysis: Analysis, en_text: str, evidence: str | list[str], *,
+                   tr_text: str = "", tr_names: dict[str, str] | None = None
+                   ) -> KeywordReport:
+    """match % = keywords found on either PDF / all keywords (PROMPT.md §5.7).
 
-    `evidence` is the owner's positive inventory text, ideally one string per entry so a
-    multi-word keyword has to be backed by a single entry (see `soft_match`)."""
-    ft, fs = fold(en_text), _squash(en_text)
+    Turkish postings work without trusting the analysis model to translate every term:
+    - a keyword is on the page if it is on the English *or* the Turkish PDF;
+    - a Turkish form is mapped back to the owner's English name through `tr_names`
+      (config `skill_names_tr` and `course_names_tr`, English → Turkish), because the
+      inventory the evidence comes from is in English. "Takım çalışması" → "Teamwork".
+
+    `evidence` is the owner's positive inventory text, as one string or one per entry.
+    """
+    pages = [(fold(t), _squash(t)) for t in (en_text, tr_text) if t]
     chunks = [fold(e) for e in ([evidence] if isinstance(evidence, str) else evidence)]
+    back = {fold(tr): en for en, tr in (tr_names or {}).items()}
     present: list[str] = []
     missing: list[str] = []
     gaps: list[str] = []
     must: list[list[str]] = []
     for kw in analysis.keywords:
         forms = [kw.term, *kw.synonyms]
-        if any(on_page(ft, fs, f) or soft_match(ft, f) for f in forms):
+        forms += [back[fold(f)] for f in forms if fold(f) in back and back[fold(f)] not in forms]
+        if any(on_page(ft, fs, f) or soft_match(ft, f) for ft, fs in pages for f in forms):
             present.append(kw.term)
         elif any(soft_match(c, f) for c in chunks for f in forms):
             missing.append(kw.term)
