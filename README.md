@@ -58,8 +58,17 @@ flowchart LR
    against the cited sources. One repair round, then the run fails with the list.
 4. **Render and fit.** Python escapes the text into your own LaTeX macros; pdfLaTeX
    compiles both languages, which are fitted to one page together.
-5. **Check and publish.** One page each, a clean ATS text layer, keyword coverage; then
-   the PDFs, the report and a log row are committed to your data repo.
+5. **Check and publish.** One page each, a clean ATS text layer, and keyword coverage with
+   your real gaps listed. A must-have you have evidence for but the page left out gets a
+   warning naming the form your inventory backs (CI/CD, say, when the posting asks for
+   Jenkins and you have only CI/CD). Then the PDFs, the report and a log row are committed
+   to your data repo.
+
+**Cover letter (optional).** Written after the resumes pass, from the same inventory and
+checked by its own fact guard with one repair round. A skill the posting asks for and you
+lack is never claimed: at most three such gaps are named in one sentence that code writes,
+"I have not worked with X yet, and I am keen to learn it quickly." A letter that still
+fails is skipped with a notice; the resumes are always delivered.
 
 ## Set up in 10 minutes
 
@@ -187,12 +196,12 @@ credentials:
   free tier is a separate, rate-limited offer, and its data terms differ from paid use.
 
 A typical run costs about **$0.10–0.15** on `claude-sonnet-5-5`, so a `monthly_budget_usd`
-of 5 covers roughly 30–45 applications. A cover letter adds about $0.05, or $0.08 when it needs a
-repair round (one language saves about $0.01; the inventory it reads is most of the cost), and a regenerate
-costs one tailoring call, about $0.05–0.10. Before each run, a budget guard sums this
-month's spend in `usage.csv`. If the run would exceed the budget, it skips the Claude API
-and uses the next provider. When credits run out, the tool says so and falls back the
-same way.
+of 5 covers roughly 30–45 applications. A cover letter adds about $0.05, or $0.08 when it
+needs a repair round (one language saves about $0.01; the inventory it reads is most of
+the cost), and a regenerate costs one tailoring call, about $0.05–0.10. Before each run,
+a budget guard sums this month's spend in `usage.csv`. If the run would exceed the budget,
+it skips the Claude API and uses the next provider. When credits run out, the tool says so
+and falls back the same way.
 
 ### Setting up the Claude API
 
